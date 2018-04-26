@@ -250,15 +250,7 @@ for service in service_dir_list:
                 # see if station is already in the station inv dictionary
 
                 if not new_station in station_inventory_dict.keys():
-                    # create the station inventory
-                    sta_inv = Station(code=new_station,
-                                      creation_date=select_inv[0][0].creation_date,
-                                      start_date=select_inv[0][0].start_date,
-                                      end_date=select_inv[0][0].end_date,
-                                      latitude=select_inv[0][0].latitude,
-                                      longitude=select_inv[0][0].longitude,
-                                      elevation=select_inv[0][0].elevation,
-                                      site=Site(new_station))
+
 
                     # create 3* channels:
 
@@ -289,7 +281,18 @@ for service in service_dir_list:
                                      longitude=select_inv[0][0].longitude,
                                      elevation=select_inv[0][0].elevation)
 
-                    sta_inv.channels.append([z_chan, n_chan, e_chan])
+                    # create the station inventory
+
+                    sta_inv = Station(code=new_station,
+                                      creation_date=select_inv[0][0].creation_date,
+                                      start_date=select_inv[0][0].start_date,
+                                      end_date=select_inv[0][0].end_date,
+                                      latitude=select_inv[0][0].latitude,
+                                      longitude=select_inv[0][0].longitude,
+                                      elevation=select_inv[0][0].elevation,
+                                      site=Site(new_station),
+                                      channels=[z_chan, n_chan, e_chan])
+
 
                     # append it to the station inventory dict
                     station_inventory_dict[new_station] = sta_inv
