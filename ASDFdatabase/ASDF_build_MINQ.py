@@ -38,13 +38,13 @@ virt_net = '_ANU'
 FDSNnetwork = '7X(2009-2011)'
 
 # XML file input
-XML_in = '/g/data1/ha3/Passive/_ANU/7X(2009-2011)/network_metadata/7X_prelim.xml'
+XML_in = '/g/data1/ha3/Passive/_ANU/7X(2009-2011)/network_metadata_temp/7X_prelim.xml'
 
 # =========================================================================== #
 
-XML_path_out = join(data_path, virt_net, FDSNnetwork, 'network_metadata')
-path_DATA = join(data_path, virt_net, FDSNnetwork, 'raw_DATA/')
-ASDF_path_out = join(data_path, virt_net, FDSNnetwork, 'ASDF')
+XML_path_out = join(data_path, virt_net, FDSNnetwork, 'network_metadata_temp')
+path_DATA = join(data_path, virt_net, FDSNnetwork, 'raw_DATA_partial/')
+ASDF_path_out = join(data_path, virt_net, FDSNnetwork, 'ASDF_working')
 
 if not exists(ASDF_path_out):
     mkdir(ASDF_path_out)
