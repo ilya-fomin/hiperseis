@@ -17,12 +17,12 @@ data_path = '/Users/ashbycooper/Desktop/Passive/'
 seed_xml_conv_path = "/Users/ashbycooper/SEEDtoXML/stationxml-converter-1.0.9.jar"
 
 # IRIS Virtual Ntework name
-virt_net = '_AusArray'
+virt_net = '_SemiPerm'
 
 # FDSN network identifier
 FDSNnetwork = 'OA'
 
-service_name = "service1"
+service_name = "retrieve_ed_test"
 
 # =========================================================================== #
 
