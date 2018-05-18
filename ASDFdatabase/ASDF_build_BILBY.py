@@ -40,6 +40,8 @@ FDSNnetwork = '7W(2008-2010)'
 # XML file input
 XML_in = '/g/data1/ha3/Passive/_ANU/7W(2008-2010)/network_metadata/7W_prelim.xml'
 
+survey_smap_rate = 50
+
 # =========================================================================== #
 
 XML_path_out = join(data_path, virt_net, FDSNnetwork, 'network_metadata')
@@ -137,6 +139,13 @@ def make_fourdig(a):
         return '0' + a
     return a
 
+def make_three_char(a):
+    if len(a) == 1:
+        return '  ' + a
+    elif len(a) == 2:
+        return ' ' + a
+    return a
+
 
 waveforms_added = 0
 
@@ -158,24 +167,24 @@ for station in data_cleaned_dict.keys():
             logfile_counter+=1
         continue
 
-    if not station in ["BL24", "BL23", "BL18"]:
-        continue
+    # if not station in ["BL24", "BL23", "BL18"]:
+    #     continue
 
     print("\n")
     print("Data for Station: "+ station)
     for year in data_cleaned_dict[station].keys():
 
-        if not year == "08":
-            continue
+        # if not year == "08":
+        #     continue
 
 
         print ("Year:"+ year)
         for _f, julian_day in enumerate(data_cleaned_dict[station][year].keys()):
 
-            if not julian_day == "347":
-                continue
+            # if not julian_day == "347":
+            #     continue
 
-            print '\r Working on Julian Day: ', julian_day, " | ", str(_f+1), " of ", str(len(data_cleaned_dict[station][year].keys())), " Days"
+            print '\r Working on Julian Day: ', make_three_char(julian_day), " | ", make_three_char(str(_f+1)), " of ", make_three_char(str(len(data_cleaned_dict[station][year].keys()))), " Days"
 
             day_seed_stream = Stream()
 
@@ -203,6 +212,12 @@ for station in data_cleaned_dict.keys():
                         continue
 
                     # print(tr)
+                    # check to see if the sampling rate is as expected:
+                    if not tr.stats.sampling_rate == survey_smap_rate:
+                        ASDF_log_file.write(filename + '\t' + "SampRateDifferent\n")
+                        logfile_counter += 1
+                        continue
+
 
                     waveforms_added += 1
 
@@ -396,12 +411,14 @@ for station in data_cleaned_dict.keys():
                     logfile_counter += 1
                     continue
 
+                keys_list.append(str(ASDF_tag))
+                info_list.append(temp_dict)
+
                 cont_tr = None
 
             cont_st = None
 
-        keys_list.append(str(ASDF_tag))
-        info_list.append(temp_dict)
+
 
 # go through the stations in the station inventory dict and append them to the network inventory
 for station, sta_inv in station_inventory_dict.iteritems():
