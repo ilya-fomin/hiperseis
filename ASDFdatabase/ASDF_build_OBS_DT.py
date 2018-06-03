@@ -29,7 +29,7 @@ code_start_time = time.time()
 # =========================== User Input Required =========================== #
 
 # Path to the data
-data_path = '/Users/ashbycooper/Desktop/'
+data_path = '/g/data/ha3/Passive/'
 
 # IRIS Virtual Ntework name
 virt_net = '_GA_OBS'
@@ -43,7 +43,7 @@ FDSNnetwork = 'DT'
 # =========================================================================== #
 
 XML_path_out = join(data_path, virt_net, FDSNnetwork, 'network_metadata')
-path_DATA = join(data_path, virt_net, FDSNnetwork, 'raw_data_partial/miniSEED_frmxtract/')
+path_DATA = join(data_path, virt_net, FDSNnetwork, 'raw_DATA/miniSEED_frmxtract/')
 ASDF_path_out = join(data_path, virt_net, FDSNnetwork, 'ASDF')
 
 

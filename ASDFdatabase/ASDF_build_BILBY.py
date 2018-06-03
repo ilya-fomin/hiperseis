@@ -13,7 +13,7 @@ import glob
 
 import numpy as np
 
-from obspy import read_inventory, read, UTCDateTime
+from obspy import read_inventory, read, UTCDateTime, Stream
 from obspy.core.inventory import Inventory, Network, Station, Site, Channel
 from obspy.io.mseed.core import InternalMSEEDReadingWarning
 
@@ -35,16 +35,18 @@ data_path = '/g/data/ha3/Passive/'
 virt_net = '_ANU'
 
 # FDSN network identifier2
-FDSNnetwork = '7X(2009-2011)'
+FDSNnetwork = '7W(2008-2010)'
 
 # XML file input
-XML_in = '/g/data1/ha3/Passive/_ANU/7X(2009-2011)/network_metadata_temp/7X_prelim.xml'
+XML_in = '/g/data1/ha3/Passive/_ANU/7W(2008-2010)/network_metadata/7W_prelim.xml'
+
+survey_smap_rate = 50
 
 # =========================================================================== #
 
-XML_path_out = join(data_path, virt_net, FDSNnetwork, 'network_metadata_temp')
-path_DATA = join(data_path, virt_net, FDSNnetwork, 'raw_DATA_partial/')
-ASDF_path_out = join(data_path, virt_net, FDSNnetwork, 'ASDF_working')
+XML_path_out = join(data_path, virt_net, FDSNnetwork, 'network_metadata')
+path_DATA = join(data_path, virt_net, FDSNnetwork, 'raw_DATA/')
+ASDF_path_out = join(data_path, virt_net, FDSNnetwork, 'ASDF')
 
 if not exists(ASDF_path_out):
     mkdir(ASDF_path_out)
@@ -55,6 +57,14 @@ JSON_out = join(ASDF_path_out, FDSNnetwork + '_raw_dataDB.json')
 ASDF_out = join(ASDF_path_out, FDSNnetwork + '.h5')
 # Logfile output
 ASDF_log_out = join(ASDF_path_out, FDSNnetwork + '.log')
+# Day filename json in:
+raw_data_cleaned_in = join(path_DATA, 'raw_data_cleaned.json')
+
+
+f = open(raw_data_cleaned_in, 'r')
+data_cleaned_dict = json.load(f)
+
+
 
 keys_list = []
 info_list = []
@@ -129,121 +139,216 @@ def make_fourdig(a):
         return '0' + a
     return a
 
+def make_three_char(a):
+    if len(a) == 1:
+        return '  ' + a
+    elif len(a) == 2:
+        return ' ' + a
+    return a
+
 
 waveforms_added = 0
 
-# Get a list of service directories
-service_dir_list = glob.glob(path_DATA + '*')
 
-# counter for number of logfiles
+# counter for number of logfiles/bad data
 logfile_counter = 0
 
-# iterate through service directories
-for service in service_dir_list:
 
-    if not isdir(service):
+
+# iterate through service --> year --> day --> filenames in data_cleaned_dict
+
+print("")
+
+for station in data_cleaned_dict.keys():
+
+    if station == "ProblemFiles":
+        for _j, prob in enumerate(data_cleaned_dict[station]):
+            ASDF_log_file.write(prob)
+            logfile_counter+=1
         continue
 
-    print '\r Processing: ', basename(service)
+    # if not station in ["BL24", "BL23", "BL18"]:
+    #     continue
 
-    day_dir_list = glob.glob(service + '/*')
+    print("\n")
+    print("Data for Station: "+ station)
+    for year in data_cleaned_dict[station].keys():
 
-    # iterate through station directories
-    for day_path in day_dir_list:
-        day_name = basename(day_path)
+        # if not year == "08":
+        #     continue
 
-        # get miniseed files
-        seed_files = glob.glob(join(day_path, '*.BH*'))  # '*miniSEED/*.mseed*'))
 
-        if len(seed_files) == 0:
-            continue
+        print ("Year:"+ year)
+        for _f, julian_day in enumerate(data_cleaned_dict[station][year].keys()):
 
-        print '\r Working on Day: ', day_name
+            # if not julian_day == "347":
+            #     continue
 
-        # Iterate through the miniseed files, fix the header values and add waveforms
-        for _i, filename in enumerate(seed_files):
-            print "\r     Parsing miniseed file ", _i + 1, ' of ', len(seed_files), ' ....',
-            sys.stdout.flush()
+            print '\r Working on Julian Day: ', make_three_char(julian_day), " | ", make_three_char(str(_f+1)), " of ", make_three_char(str(len(data_cleaned_dict[station][year].keys()))), " Days"
 
-            try:
-                # Read the stream
-                st = read(filename)
+            day_seed_stream = Stream()
 
-            except (TypeError, StructError, InternalMSEEDReadingWarning) as e:
-                # the file is not miniseed
-                ASDF_log_file.write(filename + '\t' + "TypeError\n")
+            for _i, filename in enumerate(data_cleaned_dict[station][year][julian_day]):
 
-            # iterate through traces in st (there will usually be only one trace per stream,
-            # however if there are problems with the miniseed files - like much of the ANU data - there
-            # can be more than one trace in a miniseed file (seperated by a large time gap)
-            for tr in st:
+                print "\r     Parsing miniseed file ", _i + 1, ' of ', len(data_cleaned_dict[station][year][julian_day]), ' ....',
+                sys.stdout.flush()
 
-                if len(tr) == 0:
+                try:
+                    # Read the stream
+                    st = read(filename)
+
+                except (TypeError, StructError, InternalMSEEDReadingWarning) as e:
+                    # the file is not miniseed
+                    ASDF_log_file.write(filename + '\t' + "TypeError\n")
+                    logfile_counter += 1
                     continue
 
-                waveforms_added += 1
+                # iterate through traces in st (there will usually be only one trace per stream,
+                # however if there are problems with the miniseed files - like much of the ANU data - there
+                # can be more than one trace in a miniseed file (seperated by a large time gap)
+                for tr in st:
 
-                # do some checks to make sure that the network, station, channel, location information is correct
+                    if len(tr) == 0:
+                        continue
 
-                # Network Code: the network code in the miniseed header is prone to user error
-                # (i.e. whatever the operator entered into the instrument in the field)
-                orig_net = tr.stats.network
-                # use the first two characters as network code. Temporary networks have start and end year as well
-                new_net = FDSNnetwork[:2]
-                # overwrite network code in miniseed header
-                tr.stats.network = new_net
+                    # print(tr)
+                    # check to see if the sampling rate is as expected:
+                    if not tr.stats.sampling_rate == survey_smap_rate:
+                        ASDF_log_file.write(filename + '\t' + "SampRateDifferent\n")
+                        logfile_counter += 1
+                        continue
 
-                # Station Name: use station name in trace
-                orig_station = tr.stats.station
-                new_station = orig_station
 
-                # Channel change to sBH* not SH*
-                orig_chan = tr.stats.channel
-                new_chan = "S" + orig_chan[1:]
-                # overwrite code in miniseed header
-                tr.stats.channel = new_chan
+                    waveforms_added += 1
 
-                # Location Code: use miniseed
-                orig_loc = tr.stats.location
-                new_loc = orig_loc
+                    # do some checks to make sure that the network, station, channel, location information is correct
 
-                starttime = tr.stats.starttime.timestamp
-                endtime = tr.stats.endtime.timestamp
+                    # Network Code: the network code in the miniseed header is prone to user error
+                    # (i.e. whatever the operator entered into the instrument in the field)
+                    orig_net = tr.stats.network
 
-                # see if station is already in start_end dict
-                if new_station in station_start_end_dict.keys():
-                    # compare time to start and end times in dict and see if it is earlier/later
-                    stored_starttime = station_start_end_dict[new_station][0]
-                    stored_endtime = station_start_end_dict[new_station][1]
-                    if starttime < stored_starttime:
-                        station_start_end_dict[new_station][0] = starttime
-                    elif endtime > stored_endtime:
-                        station_start_end_dict[new_station][1] = endtime
-                else:
-                    station_start_end_dict[new_station] = [starttime, endtime]
+                    # use the first two characters as network code. Temporary networks have start and end year as well
+                    new_net = FDSNnetwork[:2]
+                    # overwrite network code in miniseed header
+                    tr.stats.network = new_net
+
+                    # Station Name: assume header is correct
+                    orig_station = tr.stats.station
+                    new_station = orig_station
+
+                    # Channel assume all are BH* channels
+                    orig_chan = tr.stats.channel
+                    # print(orig_chan)
+                    if "z" in orig_chan or "Z" in orig_chan:
+                        new_chan="BHZ"
+                    elif "n" in orig_chan or "N" in orig_chan:
+                        new_chan="BHN"
+                    elif "e" in orig_chan or "E" in orig_chan:
+                        new_chan="BHE"
+
+                    # overwrite
+                    tr.stats.channel = new_chan
+
+
+                    # Location Code: use miniseed
+                    orig_loc = tr.stats.location
+                    new_loc = orig_loc
+
+
+                    starttime = tr.stats.starttime.timestamp
+                    endtime = tr.stats.endtime.timestamp
+
+                    # see if station is already in start_end dict
+                    if new_station in station_start_end_dict.keys():
+                        # compare time to start and end times in dict and see if it is earlier/later
+                        stored_starttime = station_start_end_dict[new_station][0]
+                        stored_endtime = station_start_end_dict[new_station][1]
+                        if starttime < stored_starttime:
+                            station_start_end_dict[new_station][0] = starttime
+                        elif endtime > stored_endtime:
+                            station_start_end_dict[new_station][1] = endtime
+                    else:
+                        station_start_end_dict[new_station] = [starttime, endtime]
+
+
+
+                    # now append the tarce into a stream that will contain all traces for a given day for a particular station
+
+                    day_seed_stream.append(tr)
+
+
+                    tr = None
+
+                st = None
+
+            # print(day_seed_stream)
+
+            try:
+                # attempt to merge
+                merged_st = day_seed_stream.merge()
+
+                # now split into unmasked chunks (contiguous)
+                cont_st = merged_st.split()
+
+                merged_st = None
+
+                day_seed_stream = None
+
+            except (MemoryError) as e:
+                # memory error
+                ASDF_log_file.write(station+"_"+year+"_"+julian_day+'\t' + "WarningMemoryMerging \n")
+                cont_st = day_seed_stream
+
+            # print(cont_st)
+            # cont_st.plot()
+            # now add to ASDF
+            for cont_tr in cont_st:
+
+                # print(cont_tr)
+                # cont_tr.plot()
+
+
+                cont_net = cont_tr.stats.network
+                cont_stn = cont_tr.stats.station
+                cont_chan = cont_tr.stats.channel
+                cont_loc = cont_tr.stats.location
+                cont_starttime = cont_tr.stats.starttime.timestamp
+                cont_endtime = cont_tr.stats.endtime.timestamp
+
+
+
+
 
                 # The ASDF formatted waveform name [full_id, station_id, starttime, endtime, tag]
-                ASDF_tag = make_ASDF_tag(tr, "raw_recording").encode('ascii')
+                ASDF_tag = make_ASDF_tag(cont_tr, "raw_recording").encode('ascii')
+
+                # print(ASDF_tag)
 
                 # make a dictionary for the trace that will then be appended to a larger dictionary for whole network
-                temp_dict = {"tr_starttime": starttime,
-                             "tr_endtime": endtime,
-                             "orig_network": str(orig_net),
-                             "new_network": str(new_net),
-                             "orig_station": str(orig_station),
-                             "new_station": str(new_station),
-                             "orig_channel": str(orig_chan),
-                             "new_channel": str(new_chan),
-                             "orig_location": str(orig_loc),
-                             "new_location": str(new_loc),
-                             "seed_path": str(dirname(filename)),
-                             "seed_filename": str(basename(filename)),
+                temp_dict = {"tr_starttime": cont_starttime,
+                             "tr_endtime": cont_endtime,
+                             "orig_network": str("__"),
+                             "new_network": str(cont_net),
+                             "orig_station": str("__"),
+                             "new_station": str(cont_stn),
+                             "orig_channel": str("__"),
+                             "new_channel": str(cont_chan),
+                             "orig_location": str("__"),
+                             "new_location": str(cont_loc),
+                             "seed_path": str(dirname(station+"_"+year+"_"+julian_day)),
+                             "seed_filename": str(basename(station+"_"+year+"_"+julian_day)),
                              "log_filename": ""}
 
                 # print(new_net,new_station,new_chan,new_loc)
 
                 # get the inventory object for the channel
-                select_inv = read_inv.select(network=new_net, station=new_station, channel=new_chan, location=new_loc)
+                try:
+                    select_inv = read_inv.select(network=cont_net, station=cont_stn, channel=cont_chan, location=cont_loc)
+
+                except:
+                    ASDF_log_file.write(data_path + '\t' + "NoStnXML \n")
+                    logfile_counter += 1
+                    continue
 
                 # print(select_inv)
 
@@ -254,28 +359,28 @@ for service in service_dir_list:
 
                     # create 3* channels:
 
-                    z_chan = Channel(code="SHZ", location_code="", depth=0, azimuth=0, dip=90,
+                    z_chan = Channel(code="BHZ", location_code="", depth=0, azimuth=0, dip=90,
                                     start_date=select_inv[0][0].start_date,
                                     end_date=select_inv[0][0].end_date,
-                                    sample_rate=25,
+                                    sample_rate=50,
                                     clock_drift_in_seconds_per_sample=0,
                                      latitude=select_inv[0][0].latitude,
                                      longitude=select_inv[0][0].longitude,
                                      elevation=select_inv[0][0].elevation)
 
-                    n_chan = Channel(code="SHN", location_code="", depth=0, azimuth=0, dip=0,
+                    n_chan = Channel(code="BHN", location_code="", depth=0, azimuth=0, dip=0,
                                      start_date=select_inv[0][0].start_date,
                                      end_date=select_inv[0][0].end_date,
-                                     sample_rate=25,
+                                     sample_rate=50,
                                      clock_drift_in_seconds_per_sample=0,
                                      latitude=select_inv[0][0].latitude,
                                      longitude=select_inv[0][0].longitude,
                                      elevation=select_inv[0][0].elevation)
 
-                    e_chan = Channel(code="SHE", location_code="", depth=0, azimuth=90, dip=0,
+                    e_chan = Channel(code="BHE", location_code="", depth=0, azimuth=90, dip=0,
                                      start_date=select_inv[0][0].start_date,
                                      end_date=select_inv[0][0].end_date,
-                                     sample_rate=25,
+                                     sample_rate=50,
                                      clock_drift_in_seconds_per_sample=0,
                                      latitude=select_inv[0][0].latitude,
                                      longitude=select_inv[0][0].longitude,
@@ -283,30 +388,37 @@ for service in service_dir_list:
 
                     # create the station inventory
 
-                    sta_inv = Station(code=new_station,
+                    sta_inv = Station(code=cont_stn,
                                       creation_date=select_inv[0][0].creation_date,
                                       start_date=select_inv[0][0].start_date,
                                       end_date=select_inv[0][0].end_date,
                                       latitude=select_inv[0][0].latitude,
                                       longitude=select_inv[0][0].longitude,
                                       elevation=select_inv[0][0].elevation,
-                                      site=Site(new_station),
+                                      site=Site(cont_stn),
                                       channels=[z_chan, n_chan, e_chan])
 
 
                     # append it to the station inventory dict
-                    station_inventory_dict[new_station] = sta_inv
+                    station_inventory_dict[cont_stn] = sta_inv
 
                 try:
                     # Add waveform to the ASDF file
-                    ds.add_waveforms(tr, tag="raw_recording", labels=[basename(service)])
+                    ds.add_waveforms(cont_tr, tag="raw_recording", labels=[basename(station+"_"+year+"_"+julian_day)])
                 except ASDFWarning:
                     # trace already exist in ASDF file!
-                    ASDF_log_file.write(filename + '\t' + ASDF_tag + '\t' + "ASDFDuplicateError\n")
+                    ASDF_log_file.write(station+"_"+year+"_"+julian_day + '\t' + ASDF_tag + '\t' + "ASDFDuplicateError\n")
+                    logfile_counter += 1
                     continue
 
                 keys_list.append(str(ASDF_tag))
                 info_list.append(temp_dict)
+
+                cont_tr = None
+
+            cont_st = None
+
+
 
 # go through the stations in the station inventory dict and append them to the network inventory
 for station, sta_inv in station_inventory_dict.iteritems():
@@ -407,11 +519,17 @@ exec_time = time.time() - code_start_time
 
 exec_str = "--- Execution time: %s seconds ---" % exec_time
 added_str = '--- Added ' + str(waveforms_added) + ' waveforms to ASDF and JSON database files ---'
+failed_str = '--- Encountered ' + str(logfile_counter) + ' Failures ---'
 
 print exec_str
 print added_str
+print failed_str
 
 ASDF_log_file.write(exec_str + '\n')
 ASDF_log_file.write(added_str + '\n')
+ASDF_log_file.write(failed_str+ '\n')
 
 ASDF_log_file.close()
+
+
+
