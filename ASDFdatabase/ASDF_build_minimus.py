@@ -27,16 +27,17 @@ code_start_time = time.time()
 # =========================== User Input Required =========================== #
 
 # Path to the data
-data_path = '/g/data/ha3/Passive/'
+# data_path = '/Volumes/SeiOdyssey2/Passive/'
+data_path = "/Users/ashbycooper/Desktop/Passive/"
 
 # path to IRIS dataless seed to stationxml converter
-seed_xml_conv_path = "/g/data/ha3/axc547/IRIS_SEED_XML/stationxml-converter-1.0.9.jar"
+seed_xml_conv_path = "/Users/ashbycooper/SEEDtoXML/stationxml-converter-1.0.9.jar"
 
 # IRIS Virtual Ntework name
-virt_net = '_AusArray'
+virt_net = '_Au_test'
 
 # FDSN network identifier2
-FDSNnetwork = 'OA'
+FDSNnetwork = 'AU'
 
 # survey starttime override
 # date/time of the overall start for a deployment, this will override the start date/time stored within the dataless SEED metadata
@@ -44,7 +45,7 @@ FDSNnetwork = 'OA'
 # default = None
 # UTC Time!!!!
 # format = "2017-09-10T00:00:00"
-deployment_starttime_override = "2017-09-10T00:00:00"
+deployment_starttime_override = "2017-08-01T00:00:00"
 
 # =========================================================================== #
 
@@ -52,6 +53,7 @@ deployment_starttime_override = "2017-09-10T00:00:00"
 XML_path = join(data_path, virt_net, FDSNnetwork, 'network_metadata')
 path_DATA = join(data_path, virt_net, FDSNnetwork, 'raw_DATA/')
 ASDF_path_out = join(data_path, virt_net, FDSNnetwork, 'ASDF')
+
 
 if not exists(ASDF_path_out):
     mkdir(ASDF_path_out)
@@ -62,37 +64,110 @@ JSON_out = join(ASDF_path_out, FDSNnetwork + '_raw_dataDB.json')
 ASDF_out = join(ASDF_path_out, FDSNnetwork + '.h5')
 # Logfile output
 ASDF_log_out = join(ASDF_path_out, FDSNnetwork + '.log')
+# Processing Logfile (to keep track of stations/services already in ASDF
+ASDF_proc_log = join(ASDF_path_out, FDSNnetwork + '_proc_log.txt')
+# XML_file = join(XML_path, FDSNnetwork+'.xml')
 
 
-keys_list = []
-info_list = []
 station_name_counter = Counter()
 station_name_paras = {}
 
-# remove log file if it exists
-if exists(ASDF_log_out):
-    remove(ASDF_log_out)
+# # proc log file if it exists
+# if exists(ASDF_proc_log):
+#     remove(ASDF_proc_log)
 
-# query the user to overwrite JSON database file or not
-if exists(JSON_out):
-    delete_queary = query_yes_no("Remove Existing JSON database file?")
-    if delete_queary == 'yes':
-        # removing existing SQLdb
-        remove(JSON_out)
-    elif delete_queary == 'no':
-        sys.exit(0)
+
+# # query the user to overwrite JSON database file or not
+# if exists(JSON_out):
+#     delete_queary = query_yes_no("Remove Existing JSON database file?")
+#     if delete_queary == 'yes':
+#         # removing existing SQLdb
+#         remove(JSON_out)
+#     elif delete_queary == 'no':
+#         sys.exit(0)
 
 # query the user to overwrite the ASDF database or not
 if exists(ASDF_out):
     delete_queary = query_yes_no("Remove Existing ASDF File?")
     if delete_queary == 'yes':
+        append_queary = "no"
         # removing existing ASDF
         remove(ASDF_out)
-    elif delete_queary == 'no':
-        sys.exit(0)
+        remove(JSON_out)
 
-# create the log file
-ASDF_log_file = open(ASDF_log_out, 'w')
+        # remove log file if it exists
+        if exists(ASDF_log_out):
+            remove(ASDF_log_out)
+
+        # remove proc log file if it exists
+        if exists(ASDF_proc_log):
+            remove(ASDF_proc_log)
+
+        # create the log file
+        ASDF_log_file = open(ASDF_log_out, 'w')
+
+        # create proc log file
+        ASDF_proc_log_file = open(ASDF_proc_log, "w")
+
+        proc_log_list = []
+
+        # lists for dictionary info
+        keys_list = []
+        info_list = []
+
+
+    elif delete_queary == 'no':
+        append_queary = query_yes_no("Append New Data to Existing ASDF file?")
+        if append_queary == "yes":
+            #open logfile:
+            ASDF_log_file = open(ASDF_log_out, "a+")
+
+            #open proc log file for appending
+            ASDF_proc_log_file = open(ASDF_proc_log, "a+")
+
+
+            # already existing data
+            proc_log_list = [x.rstrip("\n") for x in open(ASDF_proc_log).readlines()]
+
+
+
+            # load JSON db data into lists
+            seisdb_json_file = open(JSON_out, 'r')
+            seisdb_json_dict = json.load(seisdb_json_file)
+
+            keys_list = seisdb_json_dict.keys()
+            info_list = seisdb_json_dict.items()
+
+            # # read in existing inventory
+            # existing_inv = read_inventory(XML_file)
+
+        elif append_queary == "no":
+            sys.exit(0)
+
+else:
+    append_queary = "no"
+    # remove log file if it exists
+    if exists(ASDF_log_out):
+        remove(ASDF_log_out)
+
+    # remove proc log file if it exists
+    if exists(ASDF_proc_log):
+        remove(ASDF_proc_log)
+
+    # create the log file
+    ASDF_log_file = open(ASDF_log_out, 'w')
+
+    # create proc log file
+    ASDF_proc_log_file = open(ASDF_proc_log, "w")
+
+    proc_log_list = []
+
+    # lists for dictionary info
+    keys_list = []
+    info_list = []
+
+
+
 
 # Create/open the ASDF file
 ds = pyasdf.ASDFDataSet(ASDF_out, compression="gzip-3")
@@ -138,7 +213,7 @@ logfile_counter = 0
 # dictionary to keep inventory for all stations (default dict)
 nscl_inventory_dict = {}
 
-# dictionary to keep end date/start date for each netwrok,station, channel,location
+# dictionary to keep end date/start date for each network, station, channel, location
 nscl_start_end_dict ={}
 
 #set with stations that are in ASDF file
@@ -158,9 +233,16 @@ for service in service_dir_list:
     for station_path in station_dir_list:
         station_name = basename(station_path).split("_")[1]
 
+        # check if service and station has already been processed
+        if service + "," + station_name in proc_log_list:
+            continue
+        else:
+            ASDF_proc_log_file.write(service + "," + station_name + "\n")
+
         #get dataless seed file
         xseed_file = glob.glob(join(station_path, '*.dataless'))[0]
-        xml_out = join(XML_path, FDSNnetwork[0:2]+station_name+'.xml')
+
+        xml_out = join(XML_path, FDSNnetwork[0:2]+"_"+station_name+'.xml')
 
         # shell command to decode the dataless seed
         decode_str = 'java -jar {0} -x -so "Geoscience Australia AusArray" -o {1} {2}'.format(seed_xml_conv_path,
@@ -178,7 +260,9 @@ for service in service_dir_list:
         meta_network_code = station_inv[0].code
 
         # get miniseed files
-        seed_files = glob.glob(join(station_path, '*miniSEED*/*'))  # '*miniSEED/*.mseed*'))
+        seed_files = glob.glob(join(station_path, '*miniSEED*/*.mseed*'))
+
+        # print(seed_files)
 
         if len(seed_files) == 0:
             continue
@@ -187,7 +271,7 @@ for service in service_dir_list:
 
         # Iterate through the miniseed files, fix the header values and add waveforms
         for _i, filename in enumerate(seed_files):
-            print "\r     Parsing miniseed file ", _i + 1, ' of ', len(seed_files), ' ....',
+            print "\r     Parsing miniseed file ", _i + 1, ' of ', len(seed_files), ' ....'
             sys.stdout.flush()
 
             try:
@@ -237,7 +321,7 @@ for service in service_dir_list:
                 # check that the starttime in metadata is within the trace timespan
                 # i.e. the data is recorded during or after the clear SD card command was sent
                 if not UTCDateTime(endtime) > sta_sel_inv[0][0].start_date:
-                    print("trace is outside")
+                    # print("trace is outside")
                     continue
 
                 #check if there is a deployment starttime override set
@@ -414,34 +498,38 @@ network_inv = inventory.Network(code=FDSNnetwork[0:2], start_date=UTCDateTime(ne
 inv = inventory.Inventory(networks=[network_inv], source= "Geoscience Australia")
 
 
-print "+==============================+++"
-print ""
-
-print(inv)
-print(inv[0])
-print(inv[0][0])
-print(inv[0][0][0])
-print(inv[0][0][1])
-
 XML_file = join(XML_path, FDSNnetwork+'.xml')
+
+
+
+if append_queary == "yes":
+    existing_inv = read_inventory(XML_file)
+    # merge with existing inv
+    complete_inv = inv + existing_inv
+else:
+    complete_inv = inv
+
 
 if exists(XML_file):
     remove(XML_file)
 
-# write the inventory into the default path
-inv.write(path_or_file_object=XML_file, format='STATIONXML')
+print "+==============================+++"
+print ""
 
-inv = read_inventory(XML_file)
-print "---------"
-print(inv)
-print(inv[0])
-print(inv[0][0])
-print(inv[0][0][0])
-print(inv[0][0][1])
+print(complete_inv)
+print(complete_inv[0])
+print(complete_inv[0][0])
+print(complete_inv[0][0][0])
+
+
+# write the inventory into the default path
+complete_inv.write(path_or_file_object=XML_file, format='STATIONXML')
+
+complete_inv = read_inventory(XML_file)
 
 
 # add it to ASDF file
-ds.add_stationxml(inv)
+ds.add_stationxml(complete_inv)
 
 
 big_dictionary = dict(zip(keys_list, info_list))
@@ -464,3 +552,4 @@ ASDF_log_file.write(exec_str + '\n')
 ASDF_log_file.write(added_str + '\n')
 
 ASDF_log_file.close()
+ASDF_proc_log_file.close()

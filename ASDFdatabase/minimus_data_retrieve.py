@@ -11,18 +11,20 @@ import shutil
 # =========================== User Input Required =========================== #
 
 # Path to the data
-data_path = '/Users/ashbycooper/Desktop/Passive/'
+data_path = '/Volumes/SeiOdyssey2/Passive/'
 
 # path to IRIS dataless seed to stationxml converter
 seed_xml_conv_path = "/Users/ashbycooper/SEEDtoXML/stationxml-converter-1.0.9.jar"
 
 # IRIS Virtual Ntework name
-virt_net = '_SemiPerm'
+virt_net = '_AusArray'
 
 # FDSN network identifier
 FDSNnetwork = 'OA'
 
-service_name = "retrieve_ed_test"
+service_name = "Service1_June18"
+
+xml_out = "/Users/ashbycooper/Desktop/temp.xml"
 
 # =========================================================================== #
 
@@ -35,7 +37,6 @@ if not os.path.exists(service_path):
     os.mkdir(service_path)
 
 
-
 # get external SD card
 sd_card = glob.glob("/Volumes/*NO NAME*")[0]
 
@@ -43,9 +44,6 @@ sd_card = glob.glob("/Volumes/*NO NAME*")[0]
 # get the dataless seed file
 
 xseed_file = glob.glob(join(sd_card, "*.dataless"))[0].replace(" ", "\ ")
-
-
-xml_out = "/Users/ashbycooper/Desktop/temp.xml"
 
 #shell command to decode the dataless seed
 decode_str = 'java -jar {0} -x -so "Geoscience Australia AusArray" -o {1} {2}'.format(seed_xml_conv_path, xml_out, xseed_file)
