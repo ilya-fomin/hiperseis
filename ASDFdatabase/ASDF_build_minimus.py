@@ -15,6 +15,7 @@ import numpy as np
 
 from obspy import read_inventory
 from obspy.core import inventory, read, UTCDateTime
+from obspy.io.mseed.core import InternalMSEEDReadingWarning, InternalMSEEDReadingError
 
 import sys
 import subprocess
@@ -28,16 +29,18 @@ code_start_time = time.time()
 
 # Path to the data
 # data_path = '/Volumes/SeiOdyssey2/Passive/'
-data_path = "/Users/ashbycooper/Desktop/Passive/"
+data_in_path = "/Volumes/SeiOdyssey3/Passive/"
+
+data_out_path = "/Volumes/SeiOdysseyW/Passive/"
 
 # path to IRIS dataless seed to stationxml converter
 seed_xml_conv_path = "/Users/ashbycooper/SEEDtoXML/stationxml-converter-1.0.9.jar"
 
 # IRIS Virtual Ntework name
-virt_net = '_Au_test'
+virt_net = '_AusArray'
 
 # FDSN network identifier2
-FDSNnetwork = 'AU'
+FDSNnetwork = 'OA'
 
 # survey starttime override
 # date/time of the overall start for a deployment, this will override the start date/time stored within the dataless SEED metadata
@@ -50,9 +53,9 @@ deployment_starttime_override = "2017-08-01T00:00:00"
 # =========================================================================== #
 
 # XML_in = join(data_path, virt_net, FDSNnetwork, 'network_metadata', FDSNnetwork + ".xml")
-XML_path = join(data_path, virt_net, FDSNnetwork, 'network_metadata')
-path_DATA = join(data_path, virt_net, FDSNnetwork, 'raw_DATA/')
-ASDF_path_out = join(data_path, virt_net, FDSNnetwork, 'ASDF')
+XML_path = join(data_in_path, virt_net, FDSNnetwork, 'network_metadata')
+path_DATA = join(data_in_path, virt_net, FDSNnetwork, 'raw_DATA/')
+ASDF_path_out = join(data_out_path, virt_net, FDSNnetwork, 'ASDF')
 
 
 if not exists(ASDF_path_out):
@@ -92,8 +95,10 @@ if exists(ASDF_out):
     if delete_queary == 'yes':
         append_queary = "no"
         # removing existing ASDF
-        remove(ASDF_out)
-        remove(JSON_out)
+        if exists(ASDF_out):
+            remove(ASDF_out)
+        if exists(JSON_out):
+            remove(JSON_out)
 
         # remove log file if it exists
         if exists(ASDF_log_out):
@@ -233,6 +238,9 @@ for service in service_dir_list:
     for station_path in station_dir_list:
         station_name = basename(station_path).split("_")[1]
 
+        # if not station_name == "CD22":
+        #     continue
+
         # check if service and station has already been processed
         if service + "," + station_name in proc_log_list:
             continue
@@ -251,8 +259,15 @@ for service in service_dir_list:
         # decode the dataless seed file
         subprocess.call(decode_str, shell=True)
 
-        # open up the recently created xml file
-        station_inv = read_inventory(xml_out)
+        try:
+
+            # open up the recently created xml file
+            station_inv = read_inventory(xml_out)
+
+        except (TypeError) as e:
+            # metadata is corrupt
+            ASDF_log_file.write(station_path + '\t' + "MetadataTypeError\n")
+            continue
 
         # print(station_inv)
         # get station name for metadata
@@ -271,16 +286,17 @@ for service in service_dir_list:
 
         # Iterate through the miniseed files, fix the header values and add waveforms
         for _i, filename in enumerate(seed_files):
-            print "\r     Parsing miniseed file ", _i + 1, ' of ', len(seed_files), ' ....'
+            print "\r     Parsing miniseed file ", _i + 1, ' of ', len(seed_files), ' ....',
             sys.stdout.flush()
 
             try:
                 # Read the stream
                 st = read(filename)
 
-            except (TypeError, StructError) as e:
+            except (TypeError, StructError, InternalMSEEDReadingWarning, UserWarning, InternalMSEEDReadingError) as e:
                 # the file is not miniseed
                 ASDF_log_file.write(filename + '\t' + "TypeError\n")
+                continue
 
             # iterate through traces in st (there will usually be only one trace per stream,
             # however if there are problems with the miniseed files - like much of the ANU data - there
@@ -327,7 +343,7 @@ for service in service_dir_list:
                 #check if there is a deployment starttime override set
                 if not deployment_starttime_override == None:
                     if not UTCDateTime(endtime) > UTCDateTime(deployment_starttime_override):
-                        print("trace is outside")
+                        # print("trace is outside")
                         continue
 
 
