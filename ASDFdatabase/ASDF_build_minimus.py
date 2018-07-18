@@ -52,7 +52,7 @@ deployment_starttime_override = "2017-08-01T00:00:00"
 
 # =========================================================================== #
 
-# XML_in = join(data_path, virt_net, FDSNnetwork, 'network_metadata', FDSNnetwork + ".xml")
+# XML_in = join(data_in_path, virt_net, FDSNnetwork, 'network_metadata', FDSNnetwork + ".xml")
 XML_path = join(data_in_path, virt_net, FDSNnetwork, 'network_metadata')
 path_DATA = join(data_in_path, virt_net, FDSNnetwork, 'raw_DATA/')
 ASDF_path_out = join(data_out_path, virt_net, FDSNnetwork, 'ASDF')
@@ -127,9 +127,8 @@ if exists(ASDF_out):
             #open logfile:
             ASDF_log_file = open(ASDF_log_out, "a+")
 
-            #open proc log file for appending
+            # open proc log file for rewrite
             ASDF_proc_log_file = open(ASDF_proc_log, "a+")
-
 
             # already existing data
             proc_log_list = [x.rstrip("\n") for x in open(ASDF_proc_log).readlines()]
@@ -141,7 +140,11 @@ if exists(ASDF_out):
             seisdb_json_dict = json.load(seisdb_json_file)
 
             keys_list = seisdb_json_dict.keys()
-            info_list = seisdb_json_dict.items()
+            info_list = [seisdb_json_dict[x] for x in keys_list]
+
+            # print(proc_log_list)
+            print(keys_list)
+            print(info_list)
 
             # # read in existing inventory
             # existing_inv = read_inventory(XML_file)
@@ -172,13 +175,13 @@ else:
     info_list = []
 
 
-
+# sys.exit(0)
 
 # Create/open the ASDF file
 ds = pyasdf.ASDFDataSet(ASDF_out, compression="gzip-3")
 
 # open the station XML into obspy inventory
-# inv = read_inventory(XML_in)
+# inv = read_inventory(XML_file)
 
 
 
@@ -238,8 +241,8 @@ for service in service_dir_list:
     for station_path in station_dir_list:
         station_name = basename(station_path).split("_")[1]
 
-        # if not station_name == "CD22":
-        #     continue
+        if not station_name in ["BX20"]:#["BT28", "BX20", "CB22"]:
+            continue
 
         # check if service and station has already been processed
         if service + "," + station_name in proc_log_list:
@@ -289,6 +292,9 @@ for service in service_dir_list:
             print "\r     Parsing miniseed file ", _i + 1, ' of ', len(seed_files), ' ....',
             sys.stdout.flush()
 
+            if _i > 1:
+                continue
+
             try:
                 # Read the stream
                 st = read(filename)
@@ -312,13 +318,13 @@ for service in service_dir_list:
                 # Station Name: assign station name in the metadata as correct
                 orig_station = tr.stats.station
                 # fix the station name
-                new_station = meta_station_name
+                new_station = station_name
                 tr.stats.station = new_station
 
 
                 # Network Code: assign network name in the metadata as correct
                 orig_net = tr.stats.network
-                new_net = meta_network_code
+                new_net = FDSNnetwork
                 tr.stats.network = new_net
 
 
@@ -553,7 +559,7 @@ big_dictionary = dict(zip(keys_list, info_list))
 with open(JSON_out, 'w') as fp:
     json.dump(big_dictionary, fp)
 
-del ds
+# del ds
 print '\n'
 
 exec_time = time.time() - code_start_time
