@@ -11,7 +11,7 @@ import shutil
 # =========================== User Input Required =========================== #
 
 # Path to the data
-data_path = '/Volumes/SeiOdyssey2/Passive/'
+data_path = '/Volumes/SeiOdyssey3/Passive/'
 
 # path to IRIS dataless seed to stationxml converter
 seed_xml_conv_path = "/Users/ashbycooper/SEEDtoXML/stationxml-converter-1.0.9.jar"
@@ -71,6 +71,9 @@ station_path = join(service_path, network_code+"_"+station_code)
 
 if not os.path.exists(station_path):
     os.mkdir(station_path)
+elif os.path.exists(station_path):
+    print("Data already exists!!")
+    sys.exit()
 
 # copy over files
 data_contents = glob.glob(join(sd_card, '*.*'))

@@ -29,13 +29,13 @@ code_start_time = time.time()
 # =========================== User Input Required =========================== #
 
 # Path to the data
-data_path = '/g/data/ha3/Passive/'
+data_path = '/Users/ashbycooper/Desktop/Passive/'
 
 # IRIS Virtual Ntework name
-virt_net = '_GA_AusArray'
+virt_net = '_SemiPerm'
 
 # FDSN network identifier2
-FDSNnetwork = 'FA'
+FDSNnetwork = 'AU'
 
 # =========================================================================== #
 
@@ -145,7 +145,7 @@ for service in service_dir_list:
 
     # iterate through station directories
     for station_path in station_dir_list:
-        station_name = basename(station_path)
+        station_name = basename(station_path).split("_")[1]
 
         # get the asscoated station xml file
         XML_in = join(data_path, virt_net, FDSNnetwork, 'network_metadata', FDSNnetwork + "_" + station_name + ".xml")
