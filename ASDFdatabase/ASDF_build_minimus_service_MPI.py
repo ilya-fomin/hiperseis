@@ -7,10 +7,14 @@ import glob
 
 from mpi4py import MPI
 
+import pyasdf
+
 warnings.filterwarnings("error")
 
 code_start_time = time.time()
 
+
+pyasdf.print_sys_info()
 
 # =========================== User Input Required =========================== #
 
