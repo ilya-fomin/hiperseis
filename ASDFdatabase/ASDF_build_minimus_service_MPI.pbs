@@ -1,0 +1,22 @@
+#!/bin/bash
+#PBS -P vy72
+#PBS -N pick.224
+#PBS -q express
+#PBS -l walltime=1:00:00,mem=64GB,ncpus=32,jobfs=56GB
+#PBS -l wd
+#PBS -j oe
+#PBS -M rakib.hassan@ga.gov.au
+#PBS -m bae
+
+module purge
+module load python/2.7.13
+module load openmpi/2.1.1
+module load hdf5/1.10.2p
+module load mpi4py/3.0.0-py2
+
+export PATH=$HOME/.local/bin:$PATH
+export PYTHONPATH=/g/data/ha3/rakib/seismic/pst/passive-seismic:$PYTHONPATH
+export LC_ALL=en_AU.UTF-8
+export LANG=en_AU.UTF-8
+
+mpirun -np 4 python ASDF_build_minimus_service_MPI.py
