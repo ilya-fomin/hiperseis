@@ -3,8 +3,8 @@ import random
 import time
 import sys
 
-n_workers = 10
-n_tasks = 50
+n_workers = 3
+n_tasks = 10
 start_worker = 'worker'
 usage = 'Program should be started without argument'
 
