@@ -1,22 +1,19 @@
 #!/bin/bash
 #PBS -P vy72
-#PBS -N pick.224
+#PBS -N Job_ASDF_build_output
 #PBS -q express
-#PBS -l walltime=1:00:00,mem=64GB,ncpus=32,jobfs=56GB
+#PBS -l walltime=00:10:00,mem=800MB,ncpus=4,jobfs=100MB
 #PBS -l wd
 #PBS -j oe
-#PBS -M rakib.hassan@ga.gov.au
+#PBS -M ashby.cooper@ga.gov.au
 #PBS -m bae
 
 module purge
-module load python/2.7.13
-module load openmpi/2.1.1
+module load python3/3.6.2
+module load openmpi/1.10.2
 module load hdf5/1.10.2p
-module load mpi4py/3.0.0-py2
+module load mpi4py/3.0.0-py36-omp10.2
 
-export PATH=$HOME/.local/bin:$PATH
-export PYTHONPATH=/g/data/ha3/rakib/seismic/pst/passive-seismic:$PYTHONPATH
-export LC_ALL=en_AU.UTF-8
-export LANG=en_AU.UTF-8
+export PYTHONPATH=$HOME/.local/lib/python3.6/site-packages/:$PYTHONPATH
 
-mpirun -np 4 python ASDF_build_minimus_service_MPI.py
+mpirun -np 4 python3 ASDF_build_minimus_service_MPI_master.py > ASDF_build_minimus_service_MPI_master.out
