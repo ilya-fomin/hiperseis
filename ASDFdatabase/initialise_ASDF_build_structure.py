@@ -18,6 +18,10 @@ virt_net = '_AusArray'
 # FDSN network identifier
 FDSNnetwork = 'OA'
 
+process_service_list = ["AusArray_year1_Service1_June18"]
+
+processed_stations_list = ["OA_CC25", "OA_CB25"]
+
 # =========================================================================== #
 
 path_raw_DATA = join(data_in_path, virt_net, FDSNnetwork, 'raw_DATA/')
@@ -37,6 +41,10 @@ service_station_index = 0
 
 for service_dir in service_dir_list:
     service_name = basename(service_dir)
+
+    if not service_name in process_service_list:
+        continue
+
     if not exists(join(ASDF_path_out, service_name)):
         mkdir(join(ASDF_path_out, service_name))
 
@@ -45,6 +53,10 @@ for service_dir in service_dir_list:
 
     for service_station_path in service_station_dirs:
         station_name = basename(service_station_path)
+
+        if not station_name in processed_stations_list:
+            continue
+
         if not exists(join(ASDF_path_out, service_name, station_name)):
             mkdir(join(ASDF_path_out, service_name, station_name))
 

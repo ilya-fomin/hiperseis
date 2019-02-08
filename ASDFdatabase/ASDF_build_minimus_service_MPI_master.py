@@ -69,7 +69,7 @@ def process(rank, process_path_dict):
     waveforms_added = 0
 
     # get the station name from the directory name
-    station_name = basename(raw_DATA_path)
+    station_name = basename(raw_DATA_path).split("_")[1]
 
     # keys and info list for waveforms taht are added to ASDF
     waveform_keys_list = []
