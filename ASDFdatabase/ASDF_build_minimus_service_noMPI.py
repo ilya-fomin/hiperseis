@@ -18,8 +18,8 @@ code_start_time = time.time()
 # =========================== User Input Required =========================== #
 
 # Path to the data
-data_in_path = '/Volumes/SeiOdyssey1/Passive/'
-data_out_path = "/Users/ashbycooper/Desktop/new_Passive/"
+data_in_path = '/g/data/ha3/Passive/'
+data_out_path = "/g/data/ha3/Passive/"
 
 # IRIS Virtual Network name
 virt_net = '_AusArray'
@@ -29,7 +29,7 @@ FDSNnetwork = 'OA'
 
 # =========================================================================== #
 
-ASDF_path_out = join(data_out_path, virt_net, FDSNnetwork, 'ASDF')
+ASDF_path_out = join(data_out_path, virt_net, FDSNnetwork, 'ASDF_new')
 JSON_process_filename = join(ASDF_path_out, FDSNnetwork+"_process_file.json")
 
 
@@ -94,8 +94,14 @@ def process(rank, process_path_dict):
         # sys.stdout.flush()
 
         if not basename(seed_filename) in ["Sensor0TemprCRou_0000000010_00008.mseed",
-                                            "Sensor0SeismoZSm_0000000200_00015.mseed",
-                                         "Sensor0HumidBRou_0000000010_00006.mseed"]:
+                                           "Sensor0SeismoZSm_0000000200_00015.mseed",
+                                           "Sensor0HumidBRou_0000000010_00006.mseed",
+                                           "ClkDACVoltageRou_0000000010_00007.mseed",
+                                           "Sensor0SeismoNSm_0000000200_00021.mseed",
+                                           "Sensor0SeismoESm_0000000200_00014.mseed",
+                                           "Sensor0SeismoZSm_0000000200_00033.mseed",
+                                           "Sensor0VoltageRo_0000000010_00002.mseed",
+                                           "Sensor0TemprCRou_0000000010_00004.mseed"]:
             continue
 
         print("Reading Stream")
@@ -192,9 +198,12 @@ def process(rank, process_path_dict):
             waveform_keys_list.append(str(ASDF_tag))
             waveform_info_list.append(temp_dict)
 
+            tr = None
+        st = None
 
     print("\tFinished Iterating Traces")
 
+    del ds
 
     waveform_dictionary = dict(zip(waveform_keys_list, waveform_info_list))
 
@@ -202,10 +211,6 @@ def process(rank, process_path_dict):
 
     with open(json_filename, 'w') as fp:
         json.dump(waveform_dictionary, fp)
-
-    print("\tClosing ASDF")
-
-    del ds
 
     return(basename(asdf_filename), waveforms_added)
 

@@ -2,7 +2,7 @@
 #PBS -P vy72
 #PBS -N Job_ASDF_build_output
 #PBS -q express
-#PBS -l walltime=00:10:00,mem=800MB,ncpus=4,jobfs=100MB
+#PBS -l walltime=00:08:00,mem=3GB,ncpus=2,jobfs=100MB
 #PBS -l wd
 #PBS -j oe
 #PBS -M ashby.cooper@ga.gov.au
@@ -16,4 +16,4 @@ module load mpi4py/3.0.0-py36-omp10.2
 
 export PYTHONPATH=$HOME/.local/lib/python3.6/site-packages/:$PYTHONPATH
 
-mpirun -np 4 python3 ASDF_build_minimus_service_MPI_master.py > ASDF_build_minimus_service_MPI_master.out
+mpirun -np 2 python3 ASDF_build_minimus_service_MPI_master.py > ASDF_build_minimus_service_MPI_master.out

@@ -9,8 +9,8 @@ import pyasdf
 # =========================== User Input Required =========================== #
 
 # Path to the data
-data_in_path = '/Volumes/SeiOdyssey1/Passive/'
-data_out_path = "/Users/ashbycooper/Desktop/new_Passive/"
+data_in_path = '/g/data/ha3/Passive/'
+data_out_path = "/g/data/ha3/Passive/"
 
 # IRIS Virtual Network name
 virt_net = '_AusArray'
@@ -18,14 +18,14 @@ virt_net = '_AusArray'
 # FDSN network identifier
 FDSNnetwork = 'OA'
 
-process_service_list = ["AusArray_year1_Service1_June18"]
+process_service_list = ["AusArray_year1_pickup_Nov18"]
 
-processed_stations_list = ["OA_CC25", "OA_CB25"]
+processed_stations_list = ["OA_CC25", "OA_BW25", "OA_CC26"]
 
 # =========================================================================== #
 
 path_raw_DATA = join(data_in_path, virt_net, FDSNnetwork, 'raw_DATA/')
-ASDF_path_out = join(data_out_path, virt_net, FDSNnetwork, 'ASDF')
+ASDF_path_out = join(data_out_path, virt_net, FDSNnetwork, 'ASDF_new')
 JSON_process_filename = join(ASDF_path_out, FDSNnetwork+"_process_file.json")
 
 if not exists(join(ASDF_path_out)):
