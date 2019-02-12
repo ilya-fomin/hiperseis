@@ -87,26 +87,19 @@ def process(rank, process_path_dict):
         return (basename(asdf_filename), 0)
 
     # now open ASDF and add new data
-    ds = pyasdf.ASDFDataSet(asdf_filename)
-    del ds
+    ds = pyasdf.ASDFDataSet(asdf_filename, mpi=False)
+
+    # list to keep the processing times per stream
+    st_proc_time_list = []
 
     # Iterate through the miniseed files, fix the header values and add waveforms
     for _i, seed_filename in enumerate(seed_files):
         # print("\rParsing miniseed file ", _i + 1, ' of ', len(seed_files), ' ....',)
         # sys.stdout.flush()
+        # if not "SeismoZSm" in basename(seed_filename):
+        #     continue
 
-        if not basename(seed_filename) in ["Sensor0TemprCRou_0000000010_00008.mseed",
-                                           "Sensor0SeismoZSm_0000000200_00015.mseed",
-                                           "Sensor0HumidBRou_0000000010_00006.mseed",
-                                           "ClkDACVoltageRou_0000000010_00007.mseed",
-                                           "Sensor0SeismoNSm_0000000200_00021.mseed",
-                                           "Sensor0SeismoESm_0000000200_00014.mseed",
-                                           "Sensor0SeismoZSm_0000000200_00033.mseed",
-                                           "Sensor0VoltageRo_0000000010_00002.mseed",
-                                           "Sensor0TemprCRou_0000000010_00004.mseed"]:
-            continue
-
-        print("Process {} Reading Stream".format(str(rank)))
+        print("\tProcess {} Reading Stream".format(str(rank)))
 
         st_read_start = time.time()
 
@@ -119,8 +112,8 @@ def process(rank, process_path_dict):
             ASDF_log_file.write(seed_filename + '\t' + str(type(e)) + "\t" + str(e.args) + "\n")
             continue
 
-        st_read_exec_time = time.time() - st_read_start
-        print("\tProcess {} Exec time: {} seconds".format(str(rank), str(st_read_exec_time)))
+        # st_read_exec_time = time.time() - st_read_start
+        # print("\tProcess {} Stream Read exec time: {} seconds".format(str(rank), str(st_read_exec_time)))
 
         # iterate through traces in st (there will usually be only one trace per stream,
         # however if there are problems with the miniseed files - like much of the ANU data - there
@@ -177,39 +170,45 @@ def process(rank, process_path_dict):
                          "seed_filename": str(basename(seed_filename)),
                          "log_filename": ""}
 
-            print("\t\tProcess {} Trace Length: {}".format(str(rank), tr.stats.npts))
+            # print("\t\tProcess {} Trace Length: {}".format(str(rank), tr.stats.npts))
 
-            print("\t\tProcess {} Adding to ASDF".format(str(rank)))
+            # print("\t\tProcess {} Adding to ASDF".format(str(rank)))
 
-            asdf_add_start = time.time()
 
-            # try:
-            #     # Add waveform to the ASDF file
-            #     # if station_name == "TEST3":
-            #     #     print(tr)
-            #     ds.add_waveforms(tr, tag="raw_recording")
-            # except Exception as e:
-            #     # trace already exist in ASDF file!
-            #     ASDF_log_file.write(seed_filename + '\t' + str(type(e)) + "\t" + str(e.args) + "\n")
-            #     continue
+            try:
+                # Add waveform to the ASDF file
+                # if station_name == "TEST3":
+                #     print(tr)
+                ds.add_waveforms(tr, tag="raw_recording")
+            except Exception as e:
+                # trace already exist in ASDF file!
+                ASDF_log_file.write(seed_filename + '\t' + str(type(e)) + "\t" + str(e.args) + "\n")
+                continue
 
-            asdf_add_exec_time = time.time() - asdf_add_start
-            print("\t\t\tProcess {} Exec time: {} seconds".format(str(rank), str(asdf_add_exec_time)))
+
+
 
 
             waveform_keys_list.append(str(ASDF_tag))
             waveform_info_list.append(temp_dict)
 
             tr = None
+        asdf_add_exec_time = time.time() - st_read_start
+        print("\tProcess {} Stream read and add to ASDF exec time: {} seconds".format(str(rank), str(asdf_add_exec_time)))
+
+        st_proc_time_list.append(asdf_add_exec_time)
+
         st = None
 
-    print("\tProcess {} Finished Iterating Traces".format(str(rank)))
 
-    # del ds
+    print("Process {} Finished Iterating Streams".format(str(rank)))
+    print("Process {} Average Stream Processing Time: {} seconds".format(str(rank), sum(st_proc_time_list)/len(st_proc_time_list)))
+
+    del ds
 
     waveform_dictionary = dict(zip(waveform_keys_list, waveform_info_list))
 
-    print("\tProcess {} Dumping Waveform Dictionary".format(str(rank)))
+    print("Process {} Dumping Waveform Dictionary".format(str(rank)))
 
     with open(json_filename, 'w') as fp:
         json.dump(waveform_dictionary, fp)
