@@ -153,7 +153,7 @@ def split_list(lst, npartitions):
 def process(data_source1, data_source2, output_path,
             interval_seconds, window_seconds,
             resample_rate=None, nearest_neighbours=1,
-            fmin=0.3, fmax=1., netsta_list1='*', netsta_list2='*',
+            fmin=None, fmax=None, netsta_list1='*', netsta_list2='*',
             start_time='1970-01-01T00:00:00', end_time='2100-01-01T00:00:00',
             clip_to_2std=False, whitening=False, one_bit_normalize=False, read_buffer_size=10,
             ds1_zchan=None, ds1_nchan=None, ds1_echan=None,
@@ -179,10 +179,15 @@ def process(data_source1, data_source2, output_path,
     ds2 = Dataset(data_source2, netsta_list2)
 
     proc_stations = []
+    time_tag = None
     if (rank == 0):
+        # Register time tag with high resolution, since queued jobs can readily
+        # commence around the same time.
+        time_tag = UTCDateTime.now().strftime("%y-%m-%d.T%H.%M.%S.%f")
+
         def outputConfigParameters():
             # output config parameters
-            fn = 'correlator.%s.cfg' % (UTCDateTime.now().strftime("%y-%m-%d.T%H.%M"))
+            fn = 'correlator.%s.cfg' % (time_tag)
             fn = os.path.join(output_path, fn)
 
             f = open(fn, 'w+')
@@ -205,6 +210,7 @@ def process(data_source1, data_source2, output_path,
             f.write('%25s\t\t: %s\n' % ('--one-bit-normalize', one_bit_normalize))
             f.write('%25s\t\t: %s\n' % ('--read-buffer-size', read_buffer_size))
             f.write('%25s\t\t: %s\n' % ('--envelope-normalize', envelope_normalize))
+            f.write('%25s\t\t: %s\n' % ('--whitening', whitening))
 
             f.close()
         # end func
@@ -217,6 +223,7 @@ def process(data_source1, data_source2, output_path,
 
     # broadcast workload to all procs
     proc_stations = comm.bcast(proc_stations, root=0)
+    time_tag = comm.bcast(time_tag, root=0)
 
     startTime = UTCDateTime(start_time)
     endTime = UTCDateTime(end_time)
@@ -228,7 +235,7 @@ def process(data_source1, data_source2, output_path,
                                                         resample_rate, read_buffer_size, interval_seconds,
                                                         window_seconds, fmin, fmax, clip_to_2std, whitening,
                                                         one_bit_normalize, envelope_normalize, ensemble_stack,
-                                                        output_path, 2)
+                                                        output_path, 2, tracking_tag=time_tag)
     # end for
 # end func
 
@@ -252,8 +259,8 @@ CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
                                                        " set to -1, correlations for a cross-product of all stations"
                                                        " in both data-sets are produced -- note, this is computationally"
                                                        " expensive.")
-@click.option('--fmin', default=0.3, help="Lowest frequency for bandpass filter")
-@click.option('--fmax', default=1., help="Highest frequency for bandpass filter")
+@click.option('--fmin', default=None, help="Lowest frequency for bandpass filter; default is None")
+@click.option('--fmax', default=None, help="Highest frequency for bandpass filter; default is None")
 @click.option('--station-names1', default='*', type=str,
               help="Station name(s) (space-delimited) to process in data-source-1; default is '*', which processes all available stations.")
 @click.option('--station-names2', default='*', type=str,
@@ -315,6 +322,8 @@ def main(data_source1, data_source2, output_path, interval_seconds, window_secon
     """
 
     if(resample_rate): resample_rate = float(resample_rate)
+    if(fmin): fmin = float(fmin)
+    if(fmax): fmax = float(fmax)
 
     process(data_source1, data_source2, output_path, interval_seconds, window_seconds, resample_rate,
             nearest_neighbours, fmin, fmax, station_names1, station_names2, start_time,

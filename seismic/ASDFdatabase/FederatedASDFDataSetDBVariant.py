@@ -89,8 +89,8 @@ class FederatedASDFDataSetDBVariant():
 
         if(type(asdf_source)==str):
             self.asdf_source = asdf_source
-            self.source_sha1 = hashlib.sha1(open(self.asdf_source).read().encode('utf-8')).hexdigest()
-            fileContents = list(filter(len, open(self.asdf_source).read().splitlines()))
+            self.source_sha1 = hashlib.sha1(open(self.asdf_source).read()).hexdigest()
+            fileContents = filter(len, open(self.asdf_source).read().splitlines())
 
             # collate file names
             for i in range(len(fileContents)):
@@ -146,7 +146,7 @@ class FederatedASDFDataSetDBVariant():
         self.comm.Barrier()
 
         if(dbFound):
-            print('Found database: %s'%(self.db_fn))
+            print 'Found database: %s'%(self.db_fn)
             self.conn = sqlite3.connect(self.db_fn)
         else:
             if(self.rank==0):
@@ -171,7 +171,7 @@ class FederatedASDFDataSetDBVariant():
 
             tagsCount = 0
             for ids, ds in enumerate(self.asdf_datasets):
-                print('Creating index for %s..' % (self.asdf_file_names[ids]))
+                print 'Creating index for %s..' % (self.asdf_file_names[ids])
 
                 keys = ds.get_all_coordinates().keys()
                 keys = split_list(keys, self.nproc)
@@ -196,7 +196,7 @@ class FederatedASDFDataSetDBVariant():
                     data = [item for sublist in data for item in sublist]
                     self.conn.executemany('insert into wdb(ds_id, net, sta, loc, cha, st, et, tag) values '
                                           '(?, ?, ?, ?, ?, ?, ?, ?)', data)
-                    print('Inserted %d entries on rank %d'%(len(data), self.rank))
+                    print 'Inserted %d entries on rank %d'%(len(data), self.rank)
                     tagsCount += len(data)
                     # end if
             # end for
@@ -204,8 +204,8 @@ class FederatedASDFDataSetDBVariant():
             if(self.rank==0):
                 self.conn.execute('create index allindex on wdb(net, sta, loc, cha, st, et)')
                 self.conn.execute('create index netstaindex on netsta(ds_id, net, sta)')
-                print('Created database on rank %d for %d waveforms (%5.2f MB)' % \
-                      (self.rank, tagsCount, round(psutil.Process().memory_info().rss / 1024. / 1024., 2)))
+                print 'Created database on rank %d for %d waveforms (%5.2f MB)' % \
+                      (self.rank, tagsCount, round(psutil.Process().memory_info().rss / 1024. / 1024., 2))
 
                 if (self.rank == 0): self.conn.close()
             # end if
@@ -269,6 +269,24 @@ class FederatedASDFDataSetDBVariant():
 
         return results
     # end func
+
+    def get_waveform_count(self, network, station, location, channel, starttime,
+                           endtime, trace_count_threshold=200):
+
+        starttime = UTCDateTime(starttime).timestamp
+        endtime = UTCDateTime(endtime).timestamp
+
+        query = "select count(*) from wdb where net='%s' and sta='%s' and loc='%s' and cha='%s' " \
+                %(network, station, location, channel) + \
+                "and et>=%f and st<=%f" \
+                 % (starttime, endtime)
+
+        num_traces = self.conn.execute(query).fetchall()[0][0]
+
+        if num_traces > trace_count_threshold:
+            return 0
+        else:
+            return num_traces
 
     def get_waveforms(self, network, station, location, channel, starttime,
                       endtime, automerge=False, trace_count_threshold=200):

@@ -112,7 +112,7 @@ def whiten(x, sr, fmin=None, fmax=None):
 # end func
 
 def xcorr2(tr1, tr2, window_seconds=3600, window_overlap=0.1, interval_seconds=86400,
-           resample_rate=None, flo=0.9, fhi=1.1, clip_to_2std=False, whitening=False,
+           resample_rate=None, flo=None, fhi=None, clip_to_2std=False, whitening=False,
            one_bit_normalize=False, envelope_normalize=False,
            verbose=1, logger=None):
 
@@ -124,19 +124,15 @@ def xcorr2(tr1, tr2, window_seconds=3600, window_overlap=0.1, interval_seconds=8
     sr2_orig = sr2
     tr1_d_all = tr1.data  # refstn
     tr2_d_all = tr2.data
-    # Full size of input time series for trace 1 and trace 2.
     lentr1_all = tr1_d_all.shape[0]
     lentr2_all = tr2_d_all.shape[0]
-    # Convert window and interval times to number of samples
     window_samples_1 = window_seconds * sr1
     window_samples_2 = window_seconds * sr2
     interval_samples_1 = interval_seconds * sr1
     interval_samples_2 = interval_seconds * sr2
-    # Tracking indices for the start of the current xcorr interval
     itr1s = 0
     itr2s = 0
     sr = 0
-    # Container for the collected cross correlation results
     resll = []
 
     if(resample_rate):
@@ -152,18 +148,15 @@ def xcorr2(tr1, tr2, window_seconds=3600, window_overlap=0.1, interval_seconds=8
     intervalStartSeconds = []
     intervalEndSeconds = []
     while itr1s < lentr1_all and itr2s < lentr2_all:
-        # Tracking indices for the end of the current xcorr interval
         itr1e = min(lentr1_all, itr1s + interval_samples_1)
         itr2e = min(lentr2_all, itr2s + interval_samples_2)
 
         windowCount = 0
-        # Tracking indices for the start of the current sample window
         wtr1s = int(itr1s)
         wtr2s = int(itr2s)
         resl = []
 
         while wtr1s < itr1e and wtr2s < itr2e:
-            # Tracking indices for the end of the current sample window
             wtr1e = int(min(itr1e, wtr1s + window_samples_1))
             wtr2e = int(min(itr2e, wtr2s + window_samples_2))
 
@@ -206,8 +199,10 @@ def xcorr2(tr1, tr2, window_seconds=3600, window_overlap=0.1, interval_seconds=8
                 # end if
 
                 # apply zero-phase band-pass
-                tr1_d = bandpass(tr1_d, flo, fhi, sr1, corners=6, zerophase=True)
-                tr2_d = bandpass(tr2_d, flo, fhi, sr2, corners=6, zerophase=True)
+                if(flo and fhi):
+                    tr1_d = bandpass(tr1_d, flo, fhi, sr1, corners=6, zerophase=True)
+                    tr2_d = bandpass(tr2_d, flo, fhi, sr2, corners=6, zerophase=True)
+                # end if
 
                 # clip to +/- 2*std
                 if(clip_to_2std):
@@ -281,14 +276,9 @@ def xcorr2(tr1, tr2, window_seconds=3600, window_overlap=0.1, interval_seconds=8
 
         windowsPerInterval.append(windowCount)
 
-        # resl now contains collected sequential xcorrs in spectral domain for tr1 and tr2 across
-        # the stacking interval duration, each of which represents correlation within a
-        # window_seconds window. Stack (sum) these to compute a mean spectral correlation.
         mean = reduce((lambda tx, ty: tx + ty), resl) / len(resl)
 
         if (envelope_normalize):
-            # Negate the negative frequencies and transform back to time domain - this is equivalent
-            # to the Hilbert transform, i.e. enveloping.
             step = np.sign(np.fft.fftfreq(fftlen, 1.0 / sr))
             mean = mean + step * mean  # compute analytic
         # end if
@@ -306,7 +296,6 @@ def xcorr2(tr1, tr2, window_seconds=3600, window_overlap=0.1, interval_seconds=8
             # end if
         # end if
 
-        # Truncate the boundary effects from convolution.
         resll.append(mean[:xcorlen])
     # end while (iteration over intervals)
 
@@ -332,11 +321,11 @@ def IntervalStackXCorr(refds, tempds,
                        temp_cha,
                        resample_rate=None,
                        buffer_seconds=864000, interval_seconds=86400,
-                       window_seconds=3600, flo=0.9, fhi=1.1,
+                       window_seconds=3600, flo=None, fhi=None,
                        clip_to_2std=False, whitening=False,
                        one_bit_normalize=False, envelope_normalize=False,
                        ensemble_stack=False,
-                       outputPath='/tmp', verbose=1):
+                       outputPath='/tmp', verbose=1, tracking_tag=''):
     """
     This function rolls through two ASDF data sets, over a given time-range and cross-correlates
     waveforms from all possible station-pairs from the two data sets. To allow efficient, random
@@ -396,6 +385,8 @@ def IntervalStackXCorr(refds, tempds,
     :param ensemble_stack: Outputs a single CC function stacked over all data for a given station-pair
     :type verbose: int
     :param verbose: Verbosity of printouts. Default is 1; maximum is 3.
+    :type tracking_tag: str
+    :param tracking_tag: File tag to be added to output file names so runtime settings can be tracked
     :type outputPath: str
     :param outputPath: Folder to write results to
     :return: 1: 1d np.array with time samples spanning [-window_samples:window_samples]
@@ -408,7 +399,7 @@ def IntervalStackXCorr(refds, tempds,
     """
     # setup logger
     stationPair = '%s.%s'%(ref_net_sta, temp_net_sta)
-    fn = os.path.join(outputPath, '%s.log'%(stationPair))
+    fn = os.path.join(outputPath, '%s.log'%(stationPair if not tracking_tag else '.'.join([stationPair, tracking_tag])))
     logger = setup_logger('%s.%s'%(ref_net_sta, temp_net_sta), fn)
 
     startTime = UTCDateTime(start_time)
@@ -621,7 +612,7 @@ def IntervalStackXCorr(refds, tempds,
 
     # Save Results
     for i, k in enumerate(xcorrResultsDict.keys()):
-        fn = os.path.join(outputPath, '%s.nc'%(k))
+        fn = os.path.join(outputPath, '%s.nc'%(k if not tracking_tag else '.'.join([k, tracking_tag])))
 
         root_grp = Dataset(fn, 'w', format='NETCDF4')
         root_grp.description = 'Cross-correlation results for station-pair: %s' % (k)
@@ -689,7 +680,7 @@ def IntervalStackXCorr(refds, tempds,
 
 #             comp_list.append(station_2 + '_' + station_1)
 
-#             xcorr_func = xcorr2Stacked(tr_1, tr_2, window_seconds, interval_seconds, flo, fhi)
+#             xcorr_func = xcorr2(tr_1, tr_2, window_seconds, interval_seconds, flo, fhi)
 
 #             tr_1_len = tr_1.stats.endtime.timestamp - tr_1.stats.starttime.timestamp
 #             tr_2_len = tr_2.stats.endtime.timestamp - tr_2.stats.starttime.timestamp
