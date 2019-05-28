@@ -9,6 +9,7 @@ with open(datafolder+'ensemble.s.txt','r') as f:
     pickdb=f.readlines()
 
 IDs=range(1,len(pickdb)+1)
+IDs=[str(ID) for ID in IDs]
 
 labels={}
 for ID in IDs:
@@ -17,5 +18,5 @@ for ID in IDs:
 def autoGenerator(batch_size):
     
 
-    return DataGenerator(IDs,labels,datafolder,batch_size=batch_size)
+    return DataGenerator(IDs,labels,datafolder,batch_size=batch_size,shuffle=False)
 
