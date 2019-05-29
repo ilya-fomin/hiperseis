@@ -9,7 +9,7 @@ import obspy.core as oc
 model=shakenet(pretrained_weights='shakenet-model.hdf5')
 
 
-dataDir='/g/data/ha3/rlt118/neural-datasets/categoriser-teleseismic/'
+dataDir='/g/data/ha3/rlt118/neural-datasets/categoriser-teleseismic/smallset/'
 SIDs=getIDs(0)
 NIDs=getIDs(1)
 
