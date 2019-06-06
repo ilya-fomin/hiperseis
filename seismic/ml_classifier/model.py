@@ -12,17 +12,14 @@ num_classes=2
 
 def shakenet(pretrained_weights = None,input_size = (6002,1)):
     inputs = Input(input_size)
-    conv1 = Conv1D(8, 10, activation = 'relu', padding = 'valid', kernel_initializer = 'he_normal')(inputs)
-    conv1 = Conv1D(8, 10, activation = 'relu', padding = 'valid', kernel_initializer = 'he_normal')(conv1)
-    pool1 = MaxPooling1D(pool_size=16)(conv1)
-    conv2 = Conv1D(16, 10, activation = 'relu', padding = 'valid', kernel_initializer = 'he_normal')(pool1)
-    conv2 = Conv1D(16, 10, activation = 'relu', padding = 'valid', kernel_initializer = 'he_normal')(conv2)
-    pool2 = MaxPooling1D(pool_size=16)(conv2)
-    conv3 = Conv1D(16, 10, activation = 'relu', padding = 'valid', kernel_initializer = 'he_normal')(pool2)
-    conv3 = Conv1D(16, 10, activation = 'relu', padding = 'valid', kernel_initializer = 'he_normal')(conv3)
-    pool3 = GlobalAveragePooling1D()(conv3)
-    drop3 = Dropout(0.5)(pool3)
-    dense3=Dense(num_classes,activation='softmax')(drop3)
+    conv1=Conv1D(8, 10, activation = 'relu', padding = 'valid', kernel_initializer = 'he_normal')(inputs)
+    conv1=Conv1D(8, 10, activation = 'relu', padding = 'valid', kernel_initializer = 'he_normal')(conv1)
+    pool1=MaxPooling1D(pool_size=16)(conv1)
+    conv2=Conv1D(8, 10, activation = 'relu', padding = 'valid', kernel_initializer = 'he_normal')(pool1)
+    conv2=Conv1D(8, 10, activation = 'relu', padding = 'valid', kernel_initializer = 'he_normal')(conv2)
+    pool2=MaxPooling1D(pool_size=16)(conv2)
+    lstm3=LSTM(10)(pool2)
+    dense3=Dense(num_classes,activation='softmax')(lstm3)
 
     model = Model(input = inputs, output = dense3)
 
