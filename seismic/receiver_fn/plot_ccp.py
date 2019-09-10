@@ -11,25 +11,30 @@ Workflow:
 
 Example usage:
     python seismic/receiver_fn/plot_ccp.py --start-latlon -19.5 133.0 --end-latlon -19.5 140.0 --width 120 \
-        --channels T --stacked-scale 0.3 --title "Network OA CCP T-stacking (profile BS24-CF24)" \
+        --channels R --stacked-scale 0.3 --title "Network OA CCP T-stacking (profile BS24-CF24)" \
         /software/hiperseis/seismic/receiver_fn/DATA/OA-ZRT-cleaned.h5 \
         /software/hiperseis/seismic/receiver_fn/DATA/OA-ZRT-T_CCP_stack_BS24-CF24_2km_spacing.png
 """
 
-# pylint: disable=too-many-locals,too-many-arguments,invalid-name
+# pylint: disable=too-many-locals,too-many-arguments,invalid-name,logging-format-interpolation
 
 import os
-import numpy as np
-# from future.utils import iteritems
+import logging
+from future.utils import iteritems
 
-import click
-from obspy.taup import TauPyModel
+import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits import basemap
+import click
+
+from obspy.taup import TauPyModel
+from tqdm import tqdm
 import rf
 
-from seismic.receiver_fn.rf_util import KM_PER_DEG
-from tqdm import tqdm
+import seismic.receiver_fn.rf_util as rf_util
+import seismic.receiver_fn.rf_plot_utils as rf_plot_utils
+
+logging.basicConfig()
 
 
 def plot_ccp(matrx, length, max_depth, spacing, ofile=None, vlims=None, metadata=None, title=None):
@@ -61,6 +66,8 @@ def plot_ccp(matrx, length, max_depth, spacing, ofile=None, vlims=None, metadata
         im = plt.imshow(matrx, aspect='equal', cmap='jet', vmin=vlims[0], vmax=vlims[1], interpolation=interpolation)
     else:
         im = plt.imshow(matrx, aspect='equal', cmap='jet', interpolation=interpolation)
+    # end if
+    plt.gca().set_aspect(2.0)
     cb = plt.colorbar(im)
     cb.set_label('Stacked amplitude (arb. units)')
 
@@ -75,17 +82,17 @@ def plot_ccp(matrx, length, max_depth, spacing, ofile=None, vlims=None, metadata
     plt.xticks(range(0, int(length/spacing), int(tickstep_x/spacing)), range(0, int(length), tickstep_x))
     plt.yticks(range(0, int(max_depth/spacing), int(tickstep_y/spacing)), range(0, int(max_depth), tickstep_y))
 
-    # if metadata is not None:
-    #     for stn, meta in iteritems(metadata):
-    #         if meta is None:
-    #             continue
-    #         x = meta['sta_offset']
-    #         y = -1
-    #         th = plt.text(x, y, "{} ({})".format(stn, meta['event_count']), horizontalalignment='center',
-    #                       verticalalignment='bottom', fontsize=8)
-    #         txt_handles.append(th)
-
-    plt.axis('tight')
+    if metadata is not None:
+        for stn, meta in iteritems(metadata):
+            if meta is None:
+                continue
+            x = meta['sta_offset']
+            y = -1
+            th = plt.text(x, y, "{}\n({})".format(stn, meta['event_count']), horizontalalignment='center',
+                          verticalalignment='bottom', fontsize=8)
+            # txt_handles.append(th)
+        # end for
+    # end if
 
     if ofile:
         plt.savefig(ofile, dpi=300)
@@ -106,15 +113,15 @@ def setup_ccp_profile(length, spacing, maxdep):
     :return: Zeroed matrix and mesh coordinates
     :rtype: numpy.array, numpy.array, numpy.array
     """
-    #calculate number of cells in x and y direction 
+    # calculate number of cells in x and y direction
     n_y = int(round(maxdep / spacing, 0))
     n_x = int(round(length / spacing, 0))
 
-    #get center values
+    # get center values
     depstep = np.arange(0 + round(spacing / 2.0, 1), maxdep, spacing)
     lenstep = np.arange(0 + round(spacing / 2.0, 1), length, spacing)
 
-    #create matrix
+    # create matrix
     mtrx = np.zeros([n_x, n_y])
 
     return mtrx, depstep, lenstep
@@ -125,6 +132,7 @@ def get_amplitude(trace, time, rf_offset=5.0):
     retrieve amplitude value
     """
     indx = (time + rf_offset) * trace.stats.sampling_rate
+    # amp = trace.data[int(indx)]/trace.stats.amp_max
     amp = trace.data[int(indx)]/trace.stats.amax
     return amp
 
@@ -133,7 +141,7 @@ def add_ccp_trace(trace, inc_p, matrx, matrx_entry, vmod, depstep, lenstep, sta_
     """
     project amplitudes from all RFs onto the profile...2D rot:
     """
-    # start at zero: inc_p given, inc_s needs to be calculated  
+    # start at zero: inc_p given, inc_s needs to be calculated
     h = 0
     c = 0
     d = 0
@@ -180,7 +188,7 @@ def add_ccp_trace(trace, inc_p, matrx, matrx_entry, vmod, depstep, lenstep, sta_
         matrx[indx_x, indx_y] += amp
         matrx_entry[indx_x, indx_y] += 1
 
-    return matrx,matrx_entry
+    return matrx, matrx_entry
 
 
 def matrx_lookup(xsz, sta_offset, h, depstep, lenstep):
@@ -243,8 +251,8 @@ def equirectangular_projection(x0, y0, x1, y1):
     :return: Lengths of sides of rectangle and the diagonal. The diagonal is the distance between points 0 and 1.
     :rtype: float, float, float
     """
-    profile_x_length = (x1 - x0) * KM_PER_DEG * np.cos((y1 + y0) / 2. * np.pi / 180.)
-    profile_y_length = (y1 - y0) * KM_PER_DEG
+    profile_x_length = (x1 - x0) * rf_util.KM_PER_DEG * np.cos((y1 + y0) / 2. * np.pi / 180.)
+    profile_y_length = (y1 - y0) * rf_util.KM_PER_DEG
     # This is an approximate great circle arc length
     length = np.sqrt(profile_x_length**2 + profile_y_length**2)
 
@@ -318,7 +326,7 @@ def cross_along_track_distance(p1, p2, p3):
         at_angle = -at_angle
     ct_angle = ct_angle * 180.0 / np.pi
     at_angle = at_angle * 180.0 / np.pi
-    return (ct_angle * KM_PER_DEG, at_angle * KM_PER_DEG)
+    return (ct_angle * rf_util.KM_PER_DEG, at_angle * rf_util.KM_PER_DEG)
 
 
 def ccp_compute_station_params(rf_stream, startpoint, endpoint, width, bm=None):
@@ -342,8 +350,8 @@ def ccp_compute_station_params(rf_stream, startpoint, endpoint, width, bm=None):
     :rtype: dict
     """
     stn_params = {}
-    length = angular_distance(startpoint, endpoint) * KM_PER_DEG
-    print("Profile length = {} km".format(length))
+    length = angular_distance(startpoint, endpoint) * rf_util.KM_PER_DEG
+    log.info("Profile length = {} km".format(length))
     pbar = tqdm(total=len(rf_stream), ascii=True)
     for tr in rf_stream:
         pbar.update()
@@ -425,7 +433,7 @@ def ccp_generate(rf_stream, startpoint, endpoint, width, spacing, max_depth, cha
     mesh_entries = profile_mesh.copy()
 
     #create map plot file
-    expand_width = 1.0 + width/KM_PER_DEG
+    expand_width = 1.0 + width/rf_util.KM_PER_DEG
     m = basemap.Basemap(projection='merc', urcrnrlat=ybig + expand_width, urcrnrlon=xbig + expand_width,
                         llcrnrlon=xsmall - expand_width, llcrnrlat=ysmall - expand_width, resolution='i')
     m.drawcoastlines()
@@ -438,12 +446,12 @@ def ccp_generate(rf_stream, startpoint, endpoint, width, spacing, max_depth, cha
     m.drawmeridians(meridians, rotation=45, color="#a0a0a0", labels=[0, 0, 1, 1])
 
     # Precompute the station parameters for a given code, as this is the same for every trace.
-    print("Computing included stations...")
+    log.info("Computing included stations...")
     # stn_params = ccp_compute_station_params_legacy(rf_stream, startpoint, endpoint, width, m)
     stn_params = ccp_compute_station_params(rf_stream, startpoint, endpoint, width, m)
 
     # Processing/extraction of rf_stream data
-    print("Projecting included stations to slice...")
+    log.info("Projecting included stations to slice...")
     model = TauPyModel(model=v_background)
     pbar = tqdm(total=len(rf_stream), ascii=True)
     for tr in rf_stream:
@@ -465,7 +473,7 @@ def ccp_generate(rf_stream, startpoint, endpoint, width, spacing, max_depth, cha
                 else:
                     stn_params[stat_code]['event_count'] = 1
             except IndexError as err:
-                print(err)
+                log.error(err)
                 continue
         # end if
     # end for
@@ -514,11 +522,13 @@ def ccp_generate(rf_stream, startpoint, endpoint, width, spacing, max_depth, cha
 @click.option('--channels', type=str, default='R', show_default=True,
               help='Comma separated list of channels to use for stacking, e.g. R,T')
 @click.option('--title', type=str, help='Title text applied to the plots.')
+@click.option('--plot-rf/--no-plot-rf', default=False, show_default=True,
+              help="Whether to generate RF plot file for filtered RFs for each station")
 @click.argument('rf-file', type=click.Path(exists=True, dir_okay=False), required=True)
 @click.argument('output-file', type=click.Path(exists=False, dir_okay=False), required=True)
 def main(rf_file, output_file, start_latlon, end_latlon, width, spacing, max_depth, stacked_scale, channels,
-         title=None):
-    # rf_file is the clean H5 file of ZRT receiver functions, generated by rf_quality_filter.py
+         title=None, plot_rf=False):
+    # rf_file contains the quality labelled ZRT receiver functions generated by rf_quality_filter.py
 
     channels = channels.split(',')
 
@@ -528,12 +538,44 @@ def main(rf_file, output_file, start_latlon, end_latlon, width, spacing, max_dep
     output_file_base, ext = os.path.splitext(output_file)
     if ext != ".png":
         output_file += ".png"
-    print("Reading HDF5 file...")
+    # Read input file
+    log.info("Reading HDF5 file...")
     stream = rf.read_rf(rf_file, 'H5')
+
+    # # Apply simple filter to get rid of poor signals
+    # rf_util.label_rf_quality_simple_amplitude('ZRT', stream)
+    # stream = rf.RFStream([tr for tr in stream if tr.stats.predicted_quality == 'a'])
+
+    # Generate CCP stacks
     matrix_norm, sample_density, length, stn_params = \
         ccp_generate(stream, start_latlon, end_latlon, width=width, spacing=spacing, max_depth=max_depth,
                      channels=channels, station_map_file=output_file_base + '_MAP.png')
 
+    # Plot RFs for all stations as reference
+    if plot_rf:
+        output_file_folder, _ = os.path.split(output_file)
+        log.info("Plotting RFs to folder {}".format(output_file_folder))
+        station_codes = sorted(list({(tr.stats.network, tr.stats.station) for tr in stream if
+                                     stn_params[tr.stats.station] is not None}))
+        pbar = tqdm(total=len(station_codes), ascii=True)
+        for net_code, sta_code in station_codes:
+            pbar.update()
+            pbar.set_description('.'.join([net_code, sta_code]))
+            for ch in channels:
+                net_sta_stream = stream.select(network=net_code, station=sta_code, component=ch)
+                if not net_sta_stream:
+                    continue
+                fname = 'RF_' + '.'.join([net_code, sta_code, ch]) + '.png'
+                fname = os.path.join(output_file_folder, fname)
+                if os.path.isfile(fname):
+                    continue  # don't regen if it already exists
+                _ = rf_plot_utils.plot_rf_stack(net_sta_stream, time_window=(-5, 25), save_file=fname)
+            # end for
+        # end for
+        pbar.close()
+    # end if
+
+    # Plot CCP stacks
     if matrix_norm is not None:
         plot_ccp(matrix_norm, length, max_depth, spacing, ofile=output_file, vlims=(vmin, vmax), metadata=stn_params,
                  title=title)
@@ -544,8 +586,14 @@ def main(rf_file, output_file, start_latlon, end_latlon, width, spacing, max_dep
             median_samples = sc[len(sc)//2]
             plot_ccp(sample_density, length, max_depth, spacing, ofile=sample_density_file, vlims=(0, median_samples),
                      metadata=stn_params, title=title + ' [sample density]' if title else None)
+        # end if
+    # end if
+
+# end main
 
 
 # ---------------- MAIN ----------------
 if __name__ == "__main__":
+    log = logging.getLogger(__name__)
+    log.setLevel(logging.INFO)
     main()  # pylint: disable=no-value-for-parameter

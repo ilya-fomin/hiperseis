@@ -404,8 +404,14 @@ def label_rf_quality_simple_amplitude(rf_type, traces, snr_cutoff=2.0, rms_amp_c
     if rf_type[0:3] == 'ZRT':
         for tr in traces:
             times_rel = tr.times() - (tr.stats.onset - tr.stats.starttime)
+            near_onset_mask = (np.abs(times_rel) <= peak_location_tolerance_sec)
             if (_amplitude_metric_good(tr) and
-                    np.min(np.abs(times_rel[np.argwhere(tr.data == np.max(tr.data))])) <= peak_location_tolerance_sec):
+                    # Point in time where trace attains its max value closest to onset must be within tolerance of onset
+                    (np.min(np.abs(times_rel[np.argwhere(tr.data == np.max(tr.data))]))
+                     <= peak_location_tolerance_sec) and
+                    # Positive peak near onset must be stronger than any negative peak
+                    (np.abs(np.max(tr.data[near_onset_mask])) >= np.abs(np.min(tr.data[near_onset_mask])))
+                ):
                 tr.stats.predicted_quality = 'a'
             else:
                 tr.stats.predicted_quality = 'b'
