@@ -25,6 +25,7 @@ from future.utils import iteritems
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits import basemap
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 import click
 
 from obspy.taup import TauPyModel
@@ -37,7 +38,8 @@ import seismic.receiver_fn.rf_plot_utils as rf_plot_utils
 logging.basicConfig()
 
 
-def plot_ccp(matrx, length, max_depth, spacing, ofile=None, vlims=None, metadata=None, title=None):
+def plot_ccp(matrx, length, max_depth, spacing, ofile=None, vlims=None, metadata=None, title=None,
+             figsize=(16, 9)):
     """Plot results of CCP stacking procedure.
 
     :param matrx: [description]
@@ -60,17 +62,18 @@ def plot_ccp(matrx, length, max_depth, spacing, ofile=None, vlims=None, metadata
     tickstep_x = 50
     tickstep_y = 25
 
-    plt.figure(figsize=(32, 6))
+    plt.figure(figsize=figsize)
+    # plt.figure(figsize=(32, 6))
     interpolation = 'bilinear'
     if vlims is not None:
-        im = plt.imshow(matrx, aspect='equal', cmap='jet', vmin=vlims[0], vmax=vlims[1], interpolation=interpolation)
+        im = plt.imshow(matrx, cmap='jet', vmin=vlims[0], vmax=vlims[1], interpolation=interpolation)
     else:
-        im = plt.imshow(matrx, aspect='equal', cmap='jet', interpolation=interpolation)
+        im = plt.imshow(matrx, cmap='jet', interpolation=interpolation)
     # end if
-    aspect = 2.0
-    plt.gca().set_aspect(aspect)
-    cb = plt.colorbar(im)
-    cb.set_label('Stacked amplitude (arb. units)')
+    aspect = 4.0
+    ax = plt.gca()
+    ax.set_aspect(aspect)
+    # plt.tight_layout()
 
     if title is not None:
         plt.title(title)
@@ -86,14 +89,22 @@ def plot_ccp(matrx, length, max_depth, spacing, ofile=None, vlims=None, metadata
     plt.tick_params(right=True, labelright=True)
     plt.yticks(*ytick_args, fontsize=14)
 
+    # divider = make_axes_locatable(ax)
+    # # cax = divider.append_axes("right", size="5%", pad="8%")
+    # cax = divider.append_axes("right", size=0.002, pad=0.001)
+    # cb = plt.colorbar(im, cax=cax)
+    # cb.set_label('Stacked amplitude (arb. units)')
+
     if metadata is not None:
         for stn, meta in iteritems(metadata):
             if meta is None:
                 continue
             x = meta['sta_offset']
             y = 4 + meta['dist']/25
-            th = plt.text(x/aspect, y, "{} ({})".format(stn, meta['event_count']), horizontalalignment='center',
-                          verticalalignment='bottom', fontsize=6, backgroundcolor="#ffffff80")
+            th = plt.text(x/2, y, "{} ({})".format(stn, meta['event_count']), horizontalalignment='center',
+                          verticalalignment='bottom', fontsize=9, backgroundcolor="#ffffff80")
+            # th = plt.text(x, y, "{} ({})".format(stn, meta['event_count']), horizontalalignment='center',
+            #               verticalalignment='bottom', fontsize=6, backgroundcolor="#ffffff80")
             # txt_handles.append(th)
         # end for
     # end if
@@ -333,7 +344,7 @@ def cross_along_track_distance(p1, p2, p3):
     return (ct_angle * rf_util.KM_PER_DEG, at_angle * rf_util.KM_PER_DEG)
 
 
-def ccp_compute_station_params(rf_stream, startpoint, endpoint, width, bm=None):
+def ccp_compute_station_params(rf_stream, startpoint, endpoint, width, bm=None, log=None):
     """Determines which stations are between startpoint and endpoint great circle profile line,
        and within *width* distance of that profile line. Generates a dictionary of distance
        along profile line (*sta_offset*) and orthogonal distance from profile line (*dist*).
@@ -355,7 +366,8 @@ def ccp_compute_station_params(rf_stream, startpoint, endpoint, width, bm=None):
     """
     stn_params = {}
     length = angular_distance(startpoint, endpoint) * rf_util.KM_PER_DEG
-    log.info("Profile length = {} km".format(length))
+    if log:
+        log.info("Profile length = {} km".format(length))
     pbar = tqdm(total=len(rf_stream), ascii=True)
     for tr in rf_stream:
         pbar.update()
@@ -388,7 +400,7 @@ def ccp_compute_station_params(rf_stream, startpoint, endpoint, width, bm=None):
 
 
 def ccp_generate(rf_stream, startpoint, endpoint, width, spacing, max_depth, channels=None, v_background='ak135',
-                 station_map_file=None):
+                 station_map_file=None, log=None):
     """Main function for processing RF collection and plotting common conversion point (CCP) stack of receiver
        functions (RFs) along a specific line between startpoint and endpoint.
 
@@ -450,12 +462,14 @@ def ccp_generate(rf_stream, startpoint, endpoint, width, spacing, max_depth, cha
     m.drawmeridians(meridians, rotation=45, color="#a0a0a0", labels=[0, 0, 1, 1])
 
     # Precompute the station parameters for a given code, as this is the same for every trace.
-    log.info("Computing included stations...")
+    if log:
+        log.info("Computing included stations...")
     # stn_params = ccp_compute_station_params_legacy(rf_stream, startpoint, endpoint, width, m)
-    stn_params = ccp_compute_station_params(rf_stream, startpoint, endpoint, width, m)
+    stn_params = ccp_compute_station_params(rf_stream, startpoint, endpoint, width, m, log=log)
 
     # Processing/extraction of rf_stream data
-    log.info("Projecting included stations to slice...")
+    if log:
+        log.info("Projecting included stations to slice...")
     model = TauPyModel(model=v_background)
     pbar = tqdm(total=len(rf_stream), ascii=True)
     for tr in rf_stream:
@@ -477,7 +491,8 @@ def ccp_generate(rf_stream, startpoint, endpoint, width, spacing, max_depth, cha
                 else:
                     stn_params[stat_code]['event_count'] = 1
             except IndexError as err:
-                log.error(err)
+                if log:
+                    log.error(err)
                 continue
         # end if
     # end for
@@ -508,7 +523,7 @@ def ccp_generate(rf_stream, startpoint, endpoint, width, spacing, max_depth, cha
 
 
 def process_plot_ccp(stream, output_file, start_latlon, end_latlon, width, spacing, max_depth,
-                     stacked_scale, channels, title=None, plot_rf=False):
+                     stacked_scale, channels, title=None, plot_rf=False, log=None, figsize=(16, 9)):
     """Main function for CCP processing and plotting. Split from main so it can be called externally.
     """
     channels = channels.split(',')
@@ -527,26 +542,27 @@ def process_plot_ccp(stream, output_file, start_latlon, end_latlon, width, spaci
     # Generate CCP stacks
     matrix_norm, sample_density, length, stn_params = \
         ccp_generate(stream, start_latlon, end_latlon, width=width, spacing=spacing, max_depth=max_depth,
-                     channels=channels, station_map_file=output_file_base + '_MAP.png')
+                     channels=channels, station_map_file=output_file_base + '_MAP.png', log=log)
 
     # Plot CCP stacks
     if matrix_norm is not None:
         plot_ccp(matrix_norm, length, max_depth, spacing, ofile=output_file, vlims=(vmin, vmax), metadata=stn_params,
-                 title=title)
+                 title=title, figsize=figsize)
         if sample_density is not None:
             sample_density_file = output_file_base + '_SAMPLE_DENSITY.png'
             # Use median of number of events per station to set the scale range.
             sc = sorted([s['event_count'] for s in stn_params.values() if s is not None])
             median_samples = sc[len(sc)//2]
             plot_ccp(sample_density, length, max_depth, spacing, ofile=sample_density_file, vlims=(0, median_samples),
-                     metadata=stn_params, title=title + ' [sample density]' if title else None)
+                     metadata=stn_params, title=title + ' [sample density]' if title else None, figsize=figsize)
         # end if
     # end if
 
     # Plot RFs for all stations as reference
     if plot_rf:
         output_file_folder, _ = os.path.split(output_file)
-        log.info("Plotting RFs to folder {}".format(output_file_folder))
+        if log:
+            log.info("Plotting RFs to folder {}".format(output_file_folder))
         station_codes = sorted(list({(tr.stats.network, tr.stats.station) for tr in stream if
                                      stn_params[tr.stats.station] is not None}))
         pbar = tqdm(total=len(station_codes), ascii=True)
@@ -596,16 +612,16 @@ def main(rf_file, output_file, start_latlon, end_latlon, width, spacing, max_dep
          title=None, plot_rf=False):
     # rf_file contains the quality labelled ZRT receiver functions generated by rf_quality_filter.py
     # Read input file
+    log = logging.getLogger(__name__)
+    log.setLevel(logging.INFO)
     log.info("Reading HDF5 file...")
     stream = rf.read_rf(rf_file, 'H5')
     process_plot_ccp(stream, output_file, start_latlon, end_latlon, width, spacing, max_depth, stacked_scale,
-                     channels, title, plot_rf)
+                     channels, title, plot_rf, log=log)
 
 # end main
 
 
 # ---------------- MAIN ----------------
 if __name__ == "__main__":
-    log = logging.getLogger(__name__)
-    log.setLevel(logging.INFO)
     main()  # pylint: disable=no-value-for-parameter
