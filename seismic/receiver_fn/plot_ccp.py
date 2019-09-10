@@ -60,14 +60,15 @@ def plot_ccp(matrx, length, max_depth, spacing, ofile=None, vlims=None, metadata
     tickstep_x = 50
     tickstep_y = 25
 
-    plt.figure(figsize=(16, 9))
+    plt.figure(figsize=(32, 6))
     interpolation = 'bilinear'
     if vlims is not None:
         im = plt.imshow(matrx, aspect='equal', cmap='jet', vmin=vlims[0], vmax=vlims[1], interpolation=interpolation)
     else:
         im = plt.imshow(matrx, aspect='equal', cmap='jet', interpolation=interpolation)
     # end if
-    plt.gca().set_aspect(2.0)
+    aspect = 2.0
+    plt.gca().set_aspect(aspect)
     cb = plt.colorbar(im)
     cb.set_label('Stacked amplitude (arb. units)')
 
@@ -76,20 +77,23 @@ def plot_ccp(matrx, length, max_depth, spacing, ofile=None, vlims=None, metadata
 
     plt.ylim([int(max_depth/spacing), 0])
 
-    plt.xlabel('Distance (km)')
-    plt.ylabel('Depth (km)')
+    plt.xlabel('Distance (km)', fontsize=14)
+    plt.ylabel('Depth (km)', fontsize=14)
 
-    plt.xticks(range(0, int(length/spacing), int(tickstep_x/spacing)), range(0, int(length), tickstep_x))
-    plt.yticks(range(0, int(max_depth/spacing), int(tickstep_y/spacing)), range(0, int(max_depth), tickstep_y))
+    plt.xticks(range(0, int(length/spacing), int(tickstep_x/spacing)), range(0, int(length), tickstep_x), fontsize=14)
+    ytick_args = (range(0, int(max_depth/spacing), int(tickstep_y/spacing)), range(0, int(max_depth), tickstep_y))
+    plt.yticks(*ytick_args, fontsize=14)
+    plt.tick_params(right=True, labelright=True)
+    plt.yticks(*ytick_args, fontsize=14)
 
     if metadata is not None:
         for stn, meta in iteritems(metadata):
             if meta is None:
                 continue
             x = meta['sta_offset']
-            y = -1
-            th = plt.text(x, y, "{}\n({})".format(stn, meta['event_count']), horizontalalignment='center',
-                          verticalalignment='bottom', fontsize=8)
+            y = 4 + meta['dist']/25
+            th = plt.text(x/aspect, y, "{} ({})".format(stn, meta['event_count']), horizontalalignment='center',
+                          verticalalignment='bottom', fontsize=6, backgroundcolor="#ffffff80")
             # txt_handles.append(th)
         # end for
     # end if
@@ -503,6 +507,68 @@ def ccp_generate(rf_stream, startpoint, endpoint, width, spacing, max_depth, cha
         return None, None, 0, stn_params
 
 
+def process_plot_ccp(stream, output_file, start_latlon, end_latlon, width, spacing, max_depth,
+                     stacked_scale, channels, title=None, plot_rf=False):
+    """Main function for CCP processing and plotting. Split from main so it can be called externally.
+    """
+    channels = channels.split(',')
+
+    # Range of stacked amplitude for imshow to get best contrast
+    vmin, vmax = (-stacked_scale, stacked_scale)
+
+    output_file_base, ext = os.path.splitext(output_file)
+    if ext != ".png":
+        output_file += ".png"
+
+    # # Apply simple filter to get rid of poor signals
+    # rf_util.label_rf_quality_simple_amplitude('ZRT', stream)
+    # stream = rf.RFStream([tr for tr in stream if tr.stats.predicted_quality == 'a'])
+
+    # Generate CCP stacks
+    matrix_norm, sample_density, length, stn_params = \
+        ccp_generate(stream, start_latlon, end_latlon, width=width, spacing=spacing, max_depth=max_depth,
+                     channels=channels, station_map_file=output_file_base + '_MAP.png')
+
+    # Plot CCP stacks
+    if matrix_norm is not None:
+        plot_ccp(matrix_norm, length, max_depth, spacing, ofile=output_file, vlims=(vmin, vmax), metadata=stn_params,
+                 title=title)
+        if sample_density is not None:
+            sample_density_file = output_file_base + '_SAMPLE_DENSITY.png'
+            # Use median of number of events per station to set the scale range.
+            sc = sorted([s['event_count'] for s in stn_params.values() if s is not None])
+            median_samples = sc[len(sc)//2]
+            plot_ccp(sample_density, length, max_depth, spacing, ofile=sample_density_file, vlims=(0, median_samples),
+                     metadata=stn_params, title=title + ' [sample density]' if title else None)
+        # end if
+    # end if
+
+    # Plot RFs for all stations as reference
+    if plot_rf:
+        output_file_folder, _ = os.path.split(output_file)
+        log.info("Plotting RFs to folder {}".format(output_file_folder))
+        station_codes = sorted(list({(tr.stats.network, tr.stats.station) for tr in stream if
+                                     stn_params[tr.stats.station] is not None}))
+        pbar = tqdm(total=len(station_codes), ascii=True)
+        for net_code, sta_code in station_codes:
+            pbar.update()
+            pbar.set_description('.'.join([net_code, sta_code]))
+            for ch in channels:
+                net_sta_stream = stream.select(network=net_code, station=sta_code, component=ch)
+                if not net_sta_stream:
+                    continue
+                fname = 'RF_' + '.'.join([net_code, sta_code, ch]) + '.png'
+                fname = os.path.join(output_file_folder, fname)
+                if os.path.isfile(fname):
+                    continue  # don't regen if it already exists
+                _ = rf_plot_utils.plot_rf_stack(net_sta_stream, time_window=(-5, 25), save_file=fname)
+            # end for
+        # end for
+        pbar.close()
+    # end if
+
+# end func
+
 # ---------------- MAIN ----------------
 @click.command()
 @click.option('--start-latlon', nargs=2, type=float, required=True,
@@ -529,65 +595,11 @@ def ccp_generate(rf_stream, startpoint, endpoint, width, spacing, max_depth, cha
 def main(rf_file, output_file, start_latlon, end_latlon, width, spacing, max_depth, stacked_scale, channels,
          title=None, plot_rf=False):
     # rf_file contains the quality labelled ZRT receiver functions generated by rf_quality_filter.py
-
-    channels = channels.split(',')
-
-    # Range of stacked amplitude for imshow to get best contrast
-    vmin, vmax = (-stacked_scale, stacked_scale)
-
-    output_file_base, ext = os.path.splitext(output_file)
-    if ext != ".png":
-        output_file += ".png"
     # Read input file
     log.info("Reading HDF5 file...")
     stream = rf.read_rf(rf_file, 'H5')
-
-    # # Apply simple filter to get rid of poor signals
-    # rf_util.label_rf_quality_simple_amplitude('ZRT', stream)
-    # stream = rf.RFStream([tr for tr in stream if tr.stats.predicted_quality == 'a'])
-
-    # Generate CCP stacks
-    matrix_norm, sample_density, length, stn_params = \
-        ccp_generate(stream, start_latlon, end_latlon, width=width, spacing=spacing, max_depth=max_depth,
-                     channels=channels, station_map_file=output_file_base + '_MAP.png')
-
-    # Plot RFs for all stations as reference
-    if plot_rf:
-        output_file_folder, _ = os.path.split(output_file)
-        log.info("Plotting RFs to folder {}".format(output_file_folder))
-        station_codes = sorted(list({(tr.stats.network, tr.stats.station) for tr in stream if
-                                     stn_params[tr.stats.station] is not None}))
-        pbar = tqdm(total=len(station_codes), ascii=True)
-        for net_code, sta_code in station_codes:
-            pbar.update()
-            pbar.set_description('.'.join([net_code, sta_code]))
-            for ch in channels:
-                net_sta_stream = stream.select(network=net_code, station=sta_code, component=ch)
-                if not net_sta_stream:
-                    continue
-                fname = 'RF_' + '.'.join([net_code, sta_code, ch]) + '.png'
-                fname = os.path.join(output_file_folder, fname)
-                if os.path.isfile(fname):
-                    continue  # don't regen if it already exists
-                _ = rf_plot_utils.plot_rf_stack(net_sta_stream, time_window=(-5, 25), save_file=fname)
-            # end for
-        # end for
-        pbar.close()
-    # end if
-
-    # Plot CCP stacks
-    if matrix_norm is not None:
-        plot_ccp(matrix_norm, length, max_depth, spacing, ofile=output_file, vlims=(vmin, vmax), metadata=stn_params,
-                 title=title)
-        if sample_density is not None:
-            sample_density_file = output_file_base + '_SAMPLE_DENSITY.png'
-            # Use median of number of events per station to set the scale range.
-            sc = sorted([s['event_count'] for s in stn_params.values() if s is not None])
-            median_samples = sc[len(sc)//2]
-            plot_ccp(sample_density, length, max_depth, spacing, ofile=sample_density_file, vlims=(0, median_samples),
-                     metadata=stn_params, title=title + ' [sample density]' if title else None)
-        # end if
-    # end if
+    process_plot_ccp(stream, output_file, start_latlon, end_latlon, width, spacing, max_depth, stacked_scale,
+                     channels, title, plot_rf)
 
 # end main
 
